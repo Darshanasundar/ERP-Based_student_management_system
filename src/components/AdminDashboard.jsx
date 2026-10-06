@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowUpRight,
+  Upload,
+  Clock,
 } from 'lucide-react';
 import {
   BarChart,
@@ -29,7 +31,6 @@ import {
 } from 'recharts';
 import { ADMIN_DATA, COLLEGE_INFO } from '../data/mockData';
 import api from '../services/api';
-import ExcelUpload from './ExcelUpload';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(ADMIN_DATA.stats);
@@ -123,6 +124,14 @@ export default function AdminDashboard() {
           </div>
 
           <button
+            onClick={() => alert('Navigate to Students tab to upload data.')}
+            className="hidden md:flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-sm transition cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-600" />
+            <span>Upload (Excel)</span>
+          </button>
+
+          <button
             onClick={() => alert('Exporting Institutional Report (PDF / Excel)...')}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 hover:shadow-lg transition cursor-pointer"
           >
@@ -165,9 +174,77 @@ export default function AdminDashboard() {
         })}
       </div>
 
-      {/* Bulk Upload Section */}
-      <div className="mb-6">
-        <ExcelUpload />
+      {/* Dashboard Operational Widgets */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Widget 1: Action Required */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-rose-500" />
+              Action Required
+            </h2>
+            <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg">
+              3 Urgent
+            </span>
+          </div>
+          <div className="flex-1 flex flex-col gap-3">
+            <div className="p-3 rounded-xl border border-rose-100 bg-rose-50/50 flex items-start gap-3 transition hover:bg-rose-50">
+              <div className="mt-0.5"><AlertCircle className="w-4 h-4 text-rose-600" /></div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">15 Students Below 75% Attendance</p>
+                <p className="text-xs text-slate-500 mt-1">CSE & ECE Departments. Review required before term end.</p>
+              </div>
+            </div>
+            <div className="p-3 rounded-xl border border-amber-100 bg-amber-50/50 flex items-start gap-3 transition hover:bg-amber-50">
+              <div className="mt-0.5"><IndianRupee className="w-4 h-4 text-amber-600" /></div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">5 Major Fee Defaulters</p>
+                <p className="text-xs text-slate-500 mt-1">Total pending amount exceeds ₹3,50,000.</p>
+              </div>
+            </div>
+            <div className="p-3 rounded-xl border border-blue-100 bg-blue-50/50 flex items-start gap-3 transition hover:bg-blue-50">
+              <div className="mt-0.5"><BookOpen className="w-4 h-4 text-blue-600" /></div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Syllabus Update Pending</p>
+                <p className="text-xs text-slate-500 mt-1">Mechanical Dept requested curriculum changes for 2027.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Widget 2: Recent System Activity */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" />
+              Recent System Activity
+            </h2>
+            <button className="text-xs font-semibold text-blue-600 hover:underline">View All</button>
+          </div>
+          <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+            <div className="relative pl-4 border-l-2 border-slate-100 pb-2">
+              <div className="absolute w-2 h-2 bg-blue-500 rounded-full -left-[5px] top-1.5 ring-4 ring-white" />
+              <p className="text-xs font-bold text-slate-800">Batch of 120 CSE students registered</p>
+              <p className="text-[10px] text-slate-500 font-medium">By Admin • 10 mins ago</p>
+            </div>
+            <div className="relative pl-4 border-l-2 border-slate-100 pb-2">
+              <div className="absolute w-2 h-2 bg-emerald-500 rounded-full -left-[5px] top-1.5 ring-4 ring-white" />
+              <p className="text-xs font-bold text-slate-800">Dr. Shanmugam updated marks for CS302</p>
+              <p className="text-[10px] text-slate-500 font-medium">By Faculty • 1 hour ago</p>
+            </div>
+            <div className="relative pl-4 border-l-2 border-slate-100 pb-2">
+              <div className="absolute w-2 h-2 bg-purple-500 rounded-full -left-[5px] top-1.5 ring-4 ring-white" />
+              <p className="text-xs font-bold text-slate-800">Automated Fee Reminders Sent</p>
+              <p className="text-[10px] text-slate-500 font-medium">System • 3 hours ago</p>
+            </div>
+            <div className="relative pl-4 border-l-2 border-slate-100 pb-2">
+              <div className="absolute w-2 h-2 bg-slate-300 rounded-full -left-[5px] top-1.5 ring-4 ring-white" />
+              <p className="text-xs font-bold text-slate-800">Database Backup Completed</p>
+              <p className="text-[10px] text-slate-500 font-medium">System • Yesterday at 11:59 PM</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Charts Section 1: Side-by-Side Bar Charts */}

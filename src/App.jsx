@@ -5,7 +5,11 @@ import AdminDashboard from './components/AdminDashboard';
 import FacultyDashboard from './components/FacultyDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import UserProfile from './components/UserProfile';
-import { StudentsListView, GenericModuleView } from './components/OtherViews';
+import StudentManagement from './components/StudentManagement';
+import FacultyManagement from './components/FacultyManagement';
+import SubjectManagement from './components/SubjectManagement';
+import FeeManagement from './components/FeeManagement';
+import ReportsModule from './components/ReportsModule';
 import { DEMO_USERS } from './data/mockData';
 import { Users, BookOpen, CreditCard, FileBarChart2, Settings } from 'lucide-react';
 
@@ -52,51 +56,23 @@ export default function App() {
     }
 
     if (activeNav === 'students') {
-      return <StudentsListView />;
+      return <StudentManagement />;
     }
 
     if (activeNav === 'faculty') {
-      return (
-        <GenericModuleView
-          title="Faculty Directory & Workload Allocation"
-          description="Manage professorship profiles, teaching assignments, and laboratory mentorship schedules."
-          icon={Users}
-          tag="Staff Registry"
-        />
-      );
+      return <FacultyManagement />;
     }
 
     if (activeNav === 'subjects') {
-      return (
-        <GenericModuleView
-          title="Curriculum & Course Syllabus Management"
-          description="60 Autonomous accredited subjects mapped to Anna University OBE credit guidelines."
-          icon={BookOpen}
-          tag="Curriculum Board"
-        />
-      );
+      return <SubjectManagement />;
     }
 
     if (activeNav === 'fees') {
-      return (
-        <GenericModuleView
-          title="Central Fee Accounting & Payment Ledger"
-          description="Audit fee reconciliations, pending installment collections, and scholarship subsidies."
-          icon={CreditCard}
-          tag="Finance Office"
-        />
-      );
+      return <FeeManagement />;
     }
 
     if (activeNav === 'reports') {
-      return (
-        <GenericModuleView
-          title="Institutional Analytics & Accreditation Reports"
-          description="Generate NBA Tier-1 accreditation metrics, NAAC cycle portfolios, and NIRF disclosures."
-          icon={FileBarChart2}
-          tag="Quality Assurance"
-        />
-      );
+      return <ReportsModule />;
     }
 
     if (activeNav === 'settings') {
