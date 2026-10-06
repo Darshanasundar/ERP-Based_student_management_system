@@ -17,6 +17,7 @@ import {
   CheckCircle,
   ShieldCheck,
   ExternalLink,
+  HelpCircle,
 } from 'lucide-react';
 import { COLLEGE_INFO } from '../data/mockData';
 
@@ -283,12 +284,41 @@ export default function DashboardLayout({
         </header>
 
         {/* Dashboard Main Viewport */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-slate-50">
-          <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-slate-50 overflow-x-hidden">
+          <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 zoom-in-95 duration-500">
+            
+            {/* Breadcrumb / Top Info Strip */}
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-2">
+              <span className="hover:text-blue-600 cursor-pointer transition">Home</span>
+              <span className="text-slate-300">/</span>
+              <span className="hover:text-blue-600 cursor-pointer transition capitalize">{currentRole} Portal</span>
+              <span className="text-slate-300">/</span>
+              <span className="text-slate-700 capitalize font-semibold">{activeNav}</span>
+            </div>
+
             {children}
+            
+            {/* Global Footer */}
+            <footer className="mt-12 pt-6 border-t border-slate-200/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-slate-500 pb-2">
+              <p>© {new Date().getFullYear()} {COLLEGE_INFO.name}. All rights reserved.</p>
+              <div className="flex items-center gap-4">
+                <span className="hover:text-blue-600 cursor-pointer transition">Support Helpdesk</span>
+                <span className="hover:text-blue-600 cursor-pointer transition">Documentation</span>
+                <span className="hover:text-blue-600 cursor-pointer transition">v2.1.0 Cloud</span>
+              </div>
+            </footer>
           </div>
         </main>
       </div>
+
+      {/* Floating Help Button */}
+      <button 
+        onClick={() => alert('IT Helpdesk & Live Support portal connecting...')}
+        className="fixed bottom-6 right-6 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg shadow-blue-500/40 flex items-center justify-center transition-transform hover:-translate-y-1 z-50 group focus:outline-none"
+        aria-label="Help and Support"
+      >
+        <HelpCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />
+      </button>
     </div>
   );
 }
