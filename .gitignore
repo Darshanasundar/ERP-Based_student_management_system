@@ -1,0 +1,13 @@
+node_modules
+dist
+.DS_Store
+
+# Spring Boot
+target/
+*.jar
+*.war
+.classpath
+.project
+.settings/
+.idea/
+*.iml
