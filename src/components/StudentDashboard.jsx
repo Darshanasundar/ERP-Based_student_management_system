@@ -56,7 +56,7 @@ export default function StudentDashboard() {
           api.get('/student/marks')
         ]);
 
-        if (academicsRes.data) {
+        if (academicsRes.data && typeof academicsRes.data === 'object' && !Array.isArray(academicsRes.data) && 'currentCgpa' in academicsRes.data) {
           setAcademicData({
             attendancePercentage: academicsRes.data.attendancePercentage,
             currentCgpa: academicsRes.data.currentCgpa,
@@ -76,10 +76,10 @@ export default function StudentDashboard() {
           }
         }
 
-        if (attendanceRes.data) {
+        if (attendanceRes.data && Array.isArray(attendanceRes.data)) {
           setDetailedAttendance(attendanceRes.data);
         }
-        if (marksRes.data) {
+        if (marksRes.data && Array.isArray(marksRes.data)) {
           setDetailedMarks(marksRes.data);
         }
       } catch (error) {
@@ -150,7 +150,7 @@ export default function StudentDashboard() {
     },
     {
       title: 'CGPA',
-      value: academicData.currentCgpa.toFixed(2),
+      value: academicData.currentCgpa ? academicData.currentCgpa.toFixed(2) : "0.00",
       subtitle: STUDENT_DATA.stats.cgpa.change,
       icon: Award,
       pillBg: 'bg-purple-100',
