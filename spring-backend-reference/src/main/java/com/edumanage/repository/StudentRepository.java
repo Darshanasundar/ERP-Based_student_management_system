@@ -13,4 +13,6 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     // Custom query to get total pending fees (Total Fee - Paid Fee)
     @Query("SELECT SUM(s.feeTotal - s.feePaid) FROM Student s WHERE s.feeTotal > s.feePaid")
     BigDecimal getTotalPendingFees();
+
+    java.util.Optional<Student> findByStudentId(String studentId);
 }

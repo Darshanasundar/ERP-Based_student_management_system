@@ -25,6 +25,7 @@ public class FacultyController {
     private final StudentRepository studentRepository;
     private final AttendanceRepository attendanceRepository;
     private final MarkRepository markRepository;
+    private final com.edumanage.service.RiskPredictionService riskPredictionService;
 
     @GetMapping("/students")
     public ResponseEntity<List<Student>> getStudentsByCourse(@RequestParam("courseId") String courseId) {
@@ -61,6 +62,37 @@ public class FacultyController {
 
         markRepository.saveAll(records);
         return ResponseEntity.ok(Map.of("message", "Marks saved successfully"));
+    }
+
+    @GetMapping("/student-risk/{studentId}")
+    public ResponseEntity<com.edumanage.service.RiskPredictionService.RiskResponse> getStudentRisk(@PathVariable("studentId") String studentId) {
+        Student student = studentRepository.findByStudentId(studentId)
+            .orElseThrow(() -> new RuntimeException("Student not found"));
+
+        // Fee Ratio
+        double feePendingRatio = 0.0;
+        if (student.getFeeTotal() != null && student.getFeeTotal().compareTo(java.math.BigDecimal.ZERO) > 0) {
+            java.math.BigDecimal paid = student.getFeePaid() != null ? student.getFeePaid() : java.math.BigDecimal.ZERO;
+            feePendingRatio = student.getFeeTotal().subtract(paid).doubleValue() / student.getFeeTotal().doubleValue();
+        }
+
+        // Attendance Percentage
+        long present = attendanceRepository.countPresentByStudentId(studentId);
+        long totalDays = attendanceRepository.countTotalWorkingDaysByStudentId(studentId);
+        double attendancePercentage = totalDays > 0 ? (double) present / totalDays * 100 : 100.0;
+
+        // Marks Average
+        List<Mark> marks = markRepository.findByStudentId(studentId);
+        double marksAvg = 100.0;
+        if (!marks.isEmpty()) {
+            double sum = marks.stream().mapToDouble(m -> 
+                m.getScore().doubleValue() / m.getMaxScore().doubleValue() * 100
+            ).sum();
+            marksAvg = sum / marks.size();
+        }
+
+        com.edumanage.service.RiskPredictionService.RiskResponse response = riskPredictionService.predictRisk(attendancePercentage, marksAvg, feePendingRatio);
+        return ResponseEntity.ok(response);
     }
 
     // DTOs

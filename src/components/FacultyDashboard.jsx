@@ -29,6 +29,7 @@ import {
 import { FACULTY_DATA } from '../data/mockData';
 import AttendanceManager from './AttendanceManager';
 import MarksEntry from './MarksEntry';
+import StudentRiskTable from './StudentRiskTable';
 
 export default function FacultyDashboard() {
   const [markedClasses, setMarkedClasses] = useState({});
@@ -331,6 +332,22 @@ export default function FacultyDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <AttendanceManager courseId="CS3501" />
         <MarksEntry courseId="CS3501" />
+      </div>
+
+      {/* AI Risk Predictor Section */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-blue-600" />
+              AI Academic Risk Analyzer
+            </h2>
+            <p className="text-xs text-slate-500">
+              Machine Learning predictions based on attendance, marks, and fee payment history.
+            </p>
+          </div>
+        </div>
+        <StudentRiskTable courseId="CS3501" />
       </div>
 
       {/* Bottom Section: Recent Activities Log */}
