@@ -14,7 +14,7 @@ import { DEMO_USERS } from './data/mockData';
 import { Users, BookOpen, CreditCard, FileBarChart2, Settings } from 'lucide-react';
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentRole, setCurrentRole] = useState('Admin'); // 'Admin' | 'Faculty' | 'Student'
   const [activeNav, setActiveNav] = useState('dashboard');
 

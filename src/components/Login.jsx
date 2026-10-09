@@ -28,25 +28,28 @@ export default function Login({ onLogin }) {
     e.preventDefault();
     setIsLoading(true);
     
+    let detectedRole = role;
+    if (email.toLowerCase().endsWith('@student.com')) detectedRole = 'Student';
+    else if (email.toLowerCase().endsWith('@faculty.com')) detectedRole = 'Faculty';
+    else if (email.toLowerCase().endsWith('@admin.com')) detectedRole = 'Admin';
+
     try {
       const response = await api.post('/auth/login', {
-        username: email, // Assuming email acts as username for now
+        username: email,
         password: password
       });
       
       const { accessToken, role: userRole } = response.data;
       localStorage.setItem('jwtToken', accessToken);
       
-      onLogin({ email, role: userRole || role });
+      onLogin({ email, role: userRole || detectedRole });
     } catch (error) {
       console.warn('Backend login failed, using local mock auth.', error.message);
       // Fallback
       setTimeout(() => {
         setIsLoading(false);
-        onLogin({ email, role });
+        onLogin({ email, role: detectedRole });
       }, 400);
-    } finally {
-      setIsLoading(false);
     }
   };
 

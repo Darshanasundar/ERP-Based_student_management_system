@@ -40,8 +40,10 @@ export default function StudentDashboard() {
     const fetchAcademics = async () => {
       try {
         const response = await api.get('/student/my-academics');
-        if (response.data) {
+        if (response.data && typeof response.data.currentCgpa === 'number') {
           setAcademicData(response.data);
+        } else {
+          throw new Error('Invalid academic data format');
         }
       } catch (error) {
         console.warn('Backend not reachable, falling back to mock academic data.', error.message);

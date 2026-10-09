@@ -14,7 +14,11 @@ export default function FacultyManagement() {
   const fetchFaculty = async () => {
     try {
       const response = await api.get('/admin/faculty');
-      setFaculty(response.data);
+      if (Array.isArray(response.data)) {
+        setFaculty(response.data);
+      } else {
+        throw new Error('Not an array');
+      }
     } catch (error) {
       console.warn('Backend not available. Using mock data.', error);
       setFaculty([

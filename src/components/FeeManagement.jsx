@@ -14,7 +14,11 @@ export default function FeeManagement() {
   const fetchFees = async () => {
     try {
       const response = await api.get('/admin/fees');
-      setFees(response.data);
+      if (Array.isArray(response.data)) {
+        setFees(response.data);
+      } else {
+        throw new Error('Not an array');
+      }
     } catch (error) {
       console.warn('Backend not available. Using mock data.', error);
       setFees([

@@ -14,7 +14,11 @@ export default function SubjectManagement() {
   const fetchSubjects = async () => {
     try {
       const response = await api.get('/admin/subjects');
-      setSubjects(response.data);
+      if (Array.isArray(response.data)) {
+        setSubjects(response.data);
+      } else {
+        throw new Error('Not an array');
+      }
     } catch (error) {
       console.warn('Backend not available. Using mock data.', error);
       setSubjects([
