@@ -24,6 +24,14 @@ export default function StudentDashboard() {
   const [payingFee, setPayingFee] = useState(false);
   const [feePaidSuccess, setFeePaidSuccess] = useState(false);
 
+  const [profileData, setProfileData] = useState({
+    name: "John Doe",
+    studentId: STUDENT_DATA.profile.studentId,
+    course: STUDENT_DATA.profile.course,
+    feeTotal: 85000,
+    feePaid: 0
+  });
+
   const [academicData, setAcademicData] = useState({
     attendancePercentage: parseFloat(STUDENT_DATA.stats.attendance.value),
     currentCgpa: parseFloat(STUDENT_DATA.stats.cgpa.value),
@@ -40,10 +48,23 @@ export default function StudentDashboard() {
     const fetchAcademics = async () => {
       try {
         const response = await api.get('/student/my-academics');
-        if (response.data && typeof response.data.currentCgpa === 'number') {
-          setAcademicData(response.data);
-        } else {
-          throw new Error('Invalid academic data format');
+        if (response.data) {
+          setAcademicData({
+            attendancePercentage: response.data.attendancePercentage,
+            currentCgpa: response.data.currentCgpa,
+            recentMarks: response.data.recentMarks || []
+          });
+          setProfileData({
+            name: response.data.name || "Student",
+            studentId: response.data.studentId || "STU001",
+            course: `${response.data.department} - Year ${response.data.year}`,
+            feeTotal: response.data.feeTotal || 85000,
+            feePaid: response.data.feePaid || 0
+          });
+          
+          if (response.data.feeTotal && response.data.feePaid && response.data.feeTotal === response.data.feePaid) {
+            setFeePaidSuccess(true);
+          }
         }
       } catch (error) {
         console.warn('Backend not reachable, falling back to mock academic data.', error.message);
@@ -121,8 +142,8 @@ export default function StudentDashboard() {
     },
     {
       title: 'Fee Status',
-      value: feePaidSuccess ? 'Fully Cleared' : STUDENT_DATA.stats.feeStatus.value,
-      subtitle: feePaidSuccess ? 'Zero Balance' : STUDENT_DATA.stats.feeStatus.status,
+      value: feePaidSuccess ? 'Fully Cleared' : `₹${profileData.feeTotal - profileData.feePaid} Due`,
+      subtitle: feePaidSuccess ? 'Zero Balance' : `Paid ₹${profileData.feePaid} of ₹${profileData.feeTotal}`,
       icon: feePaidSuccess ? CheckCircle2 : AlertTriangle,
       pillBg: feePaidSuccess ? 'bg-emerald-100' : 'bg-amber-100',
       iconColor: feePaidSuccess ? 'text-emerald-600' : 'text-amber-600',
@@ -137,14 +158,14 @@ export default function StudentDashboard() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Welcome, John
+              Welcome, {profileData.name}
             </h1>
             <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
               Student Portal
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-            Roll No: <span className="font-mono font-semibold text-slate-700">{STUDENT_DATA.profile.studentId}</span> · {STUDENT_DATA.profile.course}
+            Roll No: <span className="font-mono font-semibold text-slate-700">{profileData.studentId}</span> · {profileData.course}
           </p>
         </div>
 
@@ -396,14 +417,14 @@ export default function StudentDashboard() {
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Total</span>
                 <span className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5 block">
-                  ₹{STUDENT_DATA.feeDetails.totalFee.toLocaleString('en-IN')}
+                  ₹{(profileData.feeTotal || 0).toLocaleString('en-IN')}
                 </span>
               </div>
 
               <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-center">
                 <span className="text-[10px] uppercase font-bold text-emerald-700 block">Paid</span>
                 <span className="text-sm sm:text-base font-extrabold text-emerald-700 mt-0.5 block">
-                  ₹{feePaidSuccess ? STUDENT_DATA.feeDetails.totalFee.toLocaleString('en-IN') : STUDENT_DATA.feeDetails.paidAmount.toLocaleString('en-IN')}
+                  ₹{feePaidSuccess ? (profileData.feeTotal || 0).toLocaleString('en-IN') : (profileData.feePaid || 0).toLocaleString('en-IN')}
                 </span>
               </div>
 
@@ -426,7 +447,7 @@ export default function StudentDashboard() {
                     feePaidSuccess ? 'text-slate-400' : 'text-amber-700'
                   }`}
                 >
-                  ₹{feePaidSuccess ? '0' : STUDENT_DATA.feeDetails.remainingAmount.toLocaleString('en-IN')}
+                  ₹{feePaidSuccess ? '0' : ((profileData.feeTotal || 0) - (profileData.feePaid || 0)).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>

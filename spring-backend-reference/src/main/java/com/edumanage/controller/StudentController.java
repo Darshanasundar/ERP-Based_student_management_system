@@ -19,32 +19,54 @@ public class StudentController {
 
     private final AttendanceRepository attendanceRepository;
     private final MarkRepository markRepository;
+    private final com.edumanage.repository.StudentRepository studentRepository;
 
-    @GetMapping("/my-academics")
-    public ResponseEntity<StudentAcademicDTO> getMyAcademics(
-            // In a real scenario, extract this from the JWT token via SecurityContextHolder
+    @GetMapping("/dashboard")
+    public ResponseEntity<StudentDashboardDTO> getStudentDashboard(
             @RequestHeader(value = "Authorization", required = false) String token) {
         
-        // Mock extracting student ID from JWT token
-        String studentId = "STU001"; // Default mockup
+        // Mock extracting student ID from JWT token. In real production, use SecurityContextHolder.
+        // The seeder generates IDs like "7376211CSE001". We will use the first seeded student.
+        String studentId = "7376211CSE001"; 
+
+        com.edumanage.model.Student student = studentRepository.findByStudentId(studentId)
+                .orElseThrow(() -> new RuntimeException("Student Profile Not Found"));
 
         long presentCount = attendanceRepository.countPresentByStudentId(studentId);
         long totalDays = attendanceRepository.countTotalWorkingDaysByStudentId(studentId);
-        
-        double attendancePercentage = totalDays > 0 ? ((double) presentCount / totalDays) * 100 : 93.0; // Mocking 93.0 if no data
+        double attendancePercentage = totalDays > 0 ? ((double) presentCount / totalDays) * 100 : 93.0;
         
         List<Mark> recentMarks = markRepository.findByStudentId(studentId);
 
-        StudentAcademicDTO response = new StudentAcademicDTO();
+        StudentDashboardDTO response = new StudentDashboardDTO();
+        response.setStudentId(student.getStudentId());
+        response.setName(student.getName());
+        response.setDepartment(student.getDepartment());
+        response.setYear(student.getYear());
+        response.setFeeTotal(student.getFeeTotal());
+        response.setFeePaid(student.getFeePaid());
+        
         response.setAttendancePercentage(Math.round(attendancePercentage * 100.0) / 100.0);
-        response.setCurrentCgpa(7.73); // Mock CGPA logic for now
+        response.setCurrentCgpa(7.73); // Mock CGPA
         response.setRecentMarks(recentMarks);
 
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/my-academics")
+    public ResponseEntity<StudentDashboardDTO> getMyAcademics(
+            @RequestHeader(value = "Authorization", required = false) String token) {
+        return getStudentDashboard(token);
+    }
+
     @Data
-    public static class StudentAcademicDTO {
+    public static class StudentDashboardDTO {
+        private String studentId;
+        private String name;
+        private String department;
+        private String year;
+        private java.math.BigDecimal feeTotal;
+        private java.math.BigDecimal feePaid;
         private double attendancePercentage;
         private double currentCgpa;
         private List<Mark> recentMarks;
