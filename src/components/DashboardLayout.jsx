@@ -18,30 +18,37 @@ import {
   ShieldCheck,
   ExternalLink,
   HelpCircle,
+  ClipboardCheck
 } from 'lucide-react';
 import { COLLEGE_INFO } from '../data/mockData';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function DashboardLayout({
   user,
   currentRole,
-  activeNav,
-  onNavChange,
   onRoleSwitch,
   onLogout,
   children,
 }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const navigationItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'students', label: 'Students', icon: GraduationCap },
-    { id: 'faculty', label: 'Faculty', icon: Users },
-    { id: 'subjects', label: 'Subjects', icon: BookOpen },
-    { id: 'fees', label: 'Fees', icon: CreditCard },
-    { id: 'reports', label: 'Reports', icon: FileBarChart2 },
-    { id: 'settings', label: 'Settings', icon: Settings },
+  const navigationItems = currentRole === 'Faculty' ? [
+    { id: '/faculty/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: '/faculty/classes', label: 'My Classes', icon: Users },
+    { id: '/faculty/grading', label: 'Attendance & Marks', icon: ClipboardCheck },
+    { id: '/faculty/settings', label: 'Settings', icon: Settings },
+  ] : [
+    { id: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: '/students', label: 'Students', icon: GraduationCap },
+    { id: '/faculty', label: 'Faculty', icon: Users },
+    { id: '/subjects', label: 'Subjects', icon: BookOpen },
+    { id: '/fees', label: 'Fees', icon: CreditCard },
+    { id: '/reports', label: 'Reports', icon: FileBarChart2 },
+    { id: '/settings', label: 'Settings', icon: Settings },
   ];
 
   const notifications = [
@@ -115,13 +122,13 @@ export default function DashboardLayout({
 
             {navigationItems.map((item) => {
               const Icon = item.icon;
-              const isActive = activeNav === item.id;
+              const isActive = location.pathname === item.id;
 
               return (
                 <button
                   key={item.id}
                   onClick={() => {
-                    onNavChange(item.id);
+                    navigate(item.id);
                     setMobileMenuOpen(false);
                   }}
                   className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
@@ -293,7 +300,7 @@ export default function DashboardLayout({
               <span className="text-slate-300">/</span>
               <span className="hover:text-blue-600 cursor-pointer transition capitalize">{currentRole} Portal</span>
               <span className="text-slate-300">/</span>
-              <span className="text-slate-700 capitalize font-semibold">{activeNav}</span>
+              <span className="text-slate-700 capitalize font-semibold">{navigationItems.find(n => n.id === location.pathname)?.label || 'Page'}</span>
             </div>
 
             {children}
