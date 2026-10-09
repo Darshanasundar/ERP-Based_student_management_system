@@ -14,6 +14,19 @@ public class FeeController {
 
     @Autowired
     private FeeTransactionRepository feeTransactionRepository;
+    
+    @Autowired
+    private com.edumanage.repository.FeeStructureRepository feeStructureRepository;
+
+    @GetMapping("/structures")
+    public ResponseEntity<List<com.edumanage.model.FeeStructure>> getFeeStructures() {
+        return ResponseEntity.ok(feeStructureRepository.findAll());
+    }
+
+    @PostMapping("/structures")
+    public ResponseEntity<com.edumanage.model.FeeStructure> createFeeStructure(@RequestBody com.edumanage.model.FeeStructure structure) {
+        return ResponseEntity.ok(feeStructureRepository.save(structure));
+    }
 
     @GetMapping
     public List<FeeTransaction> getAllFees() {

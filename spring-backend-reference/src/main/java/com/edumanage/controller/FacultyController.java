@@ -26,6 +26,15 @@ public class FacultyController {
     private final AttendanceRepository attendanceRepository;
     private final MarkRepository markRepository;
     private final com.edumanage.service.RiskPredictionService riskPredictionService;
+    private final com.edumanage.repository.FacultyAssignmentRepository facultyAssignmentRepository;
+
+    @GetMapping("/assignments")
+    public ResponseEntity<List<com.edumanage.model.FacultyAssignment>> getMyAssignments(
+            @RequestHeader(value = "Authorization", required = false) String token) {
+        // Hardcoded employee ID for demo purposes, normally extracted from JWT
+        String employeeId = "FAC101"; 
+        return ResponseEntity.ok(facultyAssignmentRepository.findByEmployeeId(employeeId));
+    }
 
     @GetMapping("/students")
     public ResponseEntity<List<Student>> getStudentsByCourse(@RequestParam("courseId") String courseId) {

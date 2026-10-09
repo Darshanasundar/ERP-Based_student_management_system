@@ -33,6 +33,28 @@ import StudentRiskTable from './StudentRiskTable';
 
 export default function FacultyDashboard() {
   const [markedClasses, setMarkedClasses] = useState({});
+  const [assignments, setAssignments] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState('CS3501');
+
+  React.useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const { default: api } = await import('../services/api');
+        const res = await api.get('/faculty/assignments');
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          setAssignments(res.data);
+          setSelectedCourseId(res.data[0].subjectCode);
+        }
+      } catch (error) {
+        console.error("Failed to fetch assignments", error);
+        // Fallback to mock assignment
+        setAssignments([
+          { id: 1, subjectCode: 'CS3501', academicYear: '2026', semester: 'Odd' }
+        ]);
+      }
+    };
+    fetchAssignments();
+  }, []);
 
   const handleMarkAttendance = (id) => {
     setMarkedClasses((prev) => ({
@@ -328,10 +350,24 @@ export default function FacultyDashboard() {
         </div>
       </div>
 
+      {/* Subject Selection for Tools */}
+      <div className="bg-blue-50 rounded-xl p-4 flex items-center justify-between border border-blue-100">
+        <span className="text-sm font-semibold text-blue-900">Select Subject to Manage:</span>
+        <select 
+          className="px-4 py-2 bg-white border border-blue-200 rounded-lg text-sm font-semibold text-blue-700 outline-none"
+          value={selectedCourseId}
+          onChange={(e) => setSelectedCourseId(e.target.value)}
+        >
+          {assignments.map(a => (
+            <option key={a.id} value={a.subjectCode}>{a.subjectCode} - {a.semester} Sem</option>
+          ))}
+        </select>
+      </div>
+
       {/* Faculty Tools: Attendance & Marks Entry */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AttendanceManager courseId="CS3501" />
-        <MarksEntry courseId="CS3501" />
+        <AttendanceManager courseId={selectedCourseId} />
+        <MarksEntry courseId={selectedCourseId} />
       </div>
 
       {/* AI Risk Predictor Section */}
@@ -347,7 +383,7 @@ export default function FacultyDashboard() {
             </p>
           </div>
         </div>
-        <StudentRiskTable courseId="CS3501" />
+        <StudentRiskTable courseId={selectedCourseId} />
       </div>
 
       {/* Bottom Section: Recent Activities Log */}
