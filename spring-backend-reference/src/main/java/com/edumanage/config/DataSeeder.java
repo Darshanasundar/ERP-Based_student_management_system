@@ -34,29 +34,21 @@ public class DataSeeder implements CommandLineRunner {
 
     private void seedFaculty() {
         if (facultyRepository.count() == 0) {
-            Faculty f1 = new Faculty();
-            f1.setEmployeeId("FAC101");
-            f1.setName("Dr. Ananya Sharma");
-            f1.setDepartment("CSE");
-            f1.setDesignation("Professor & HOD");
-            f1.setEmail("ananya.sharma@gec.edu");
-
-            Faculty f2 = new Faculty();
-            f2.setEmployeeId("FAC102");
-            f2.setName("Prof. Rajesh Kumar");
-            f2.setDepartment("ECE");
-            f2.setDesignation("Associate Professor");
-            f2.setEmail("rajesh.kumar@gec.edu");
-
-            Faculty f3 = new Faculty();
-            f3.setEmployeeId("FAC103");
-            f3.setName("Dr. Priya Venkatesh");
-            f3.setDepartment("MECH");
-            f3.setDesignation("Assistant Professor");
-            f3.setEmail("priya.venkatesh@gec.edu");
-
-            facultyRepository.saveAll(List.of(f1, f2, f3));
-            System.out.println("Seeded Faculty Data");
+            java.util.List<Faculty> faculties = new java.util.ArrayList<>();
+            String[] depts = {"CSE", "ECE", "MECH", "CIVIL", "IT"};
+            String[] designations = {"Professor", "Associate Professor", "Assistant Professor"};
+            
+            for (int i = 1; i <= 10; i++) {
+                Faculty f = new Faculty();
+                f.setEmployeeId(String.format("FAC%03d", i));
+                f.setName("Faculty " + i);
+                f.setDepartment(depts[i % depts.length]);
+                f.setDesignation(designations[i % designations.length]);
+                f.setEmail("faculty" + i + "@gec.edu");
+                faculties.add(f);
+            }
+            facultyRepository.saveAll(faculties);
+            System.out.println("Seeded 10 Faculty Data");
         }
     }
 
@@ -113,24 +105,28 @@ public class DataSeeder implements CommandLineRunner {
     
     private void seedStudents() {
         if (studentRepository.count() == 0) {
-            Student st1 = new Student();
-            st1.setStudentId("7376211CS101");
-            st1.setName("Arjun Reddy");
-            st1.setDepartment("CSE");
-            st1.setYear("4");
-            st1.setSemester("7");
-            st1.setEmail("arjun.reddy@gec.edu");
-
-            Student st2 = new Student();
-            st2.setStudentId("7376211EC145");
-            st2.setName("Neha Gupta");
-            st2.setDepartment("ECE");
-            st2.setYear("3");
-            st2.setSemester("5");
-            st2.setEmail("neha.gupta@gec.edu");
-
-            studentRepository.saveAll(List.of(st1, st2));
-            System.out.println("Seeded Student Data");
+            java.util.List<Student> students = new java.util.ArrayList<>();
+            String[] depts = {"CSE", "ECE", "MECH", "CIVIL", "IT"};
+            String[] years = {"1", "2", "3", "4"};
+            
+            for (int i = 1; i <= 50; i++) {
+                Student st = new Student();
+                st.setStudentId(String.format("7376211%s%03d", depts[i % depts.length], i));
+                st.setName("Student " + i);
+                st.setDepartment(depts[i % depts.length]);
+                st.setYear(years[i % years.length]);
+                st.setEmail("student" + i + "@gec.edu");
+                
+                // Assign some fees
+                java.math.BigDecimal total = java.math.BigDecimal.valueOf(100000);
+                java.math.BigDecimal paid = java.math.BigDecimal.valueOf((i % 5) * 25000);
+                st.setFeeTotal(total);
+                st.setFeePaid(paid);
+                
+                students.add(st);
+            }
+            studentRepository.saveAll(students);
+            System.out.println("Seeded 50 Student Data");
         }
     }
 }

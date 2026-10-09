@@ -13,11 +13,17 @@ export default function StudentRiskTable({ courseId = 'CS3501' }) {
       try {
         // Fetch list of students
         const res = await api.get(`/faculty/students?courseId=${courseId}`);
-        const studentList = Array.isArray(res.data) ? res.data : [
-          { studentId: '7376211CS101', name: 'John Doe', department: 'CSE' },
-          { studentId: '7376211CS102', name: 'Alice Smith', department: 'CSE' },
-          { studentId: '7376211CS103', name: 'Bob Johnson', department: 'CSE' }
-        ];
+        // Generate 50 mock students for fallback if API returns empty/invalid
+        const generateMockStudents = () => {
+          const depts = ["CSE", "ECE", "MECH", "CIVIL", "IT"];
+          return Array.from({ length: 50 }, (_, i) => ({
+            studentId: `7376211${depts[i % depts.length]}${(i + 1).toString().padStart(3, '0')}`,
+            name: `Student ${i + 1}`,
+            department: depts[i % depts.length]
+          }));
+        };
+
+        const studentList = Array.isArray(res.data) && res.data.length > 0 ? res.data : generateMockStudents();
         
         setStudents(studentList);
 
@@ -47,18 +53,24 @@ export default function StudentRiskTable({ courseId = 'CS3501' }) {
 
       } catch (error) {
         console.error("Failed to load students", error);
-        // Full fallback
-        const mockStudents = [
-          { studentId: '7376211CS101', name: 'John Doe', department: 'CSE' },
-          { studentId: '7376211CS102', name: 'Alice Smith', department: 'CSE' },
-          { studentId: '7376211CS103', name: 'Bob Johnson', department: 'CSE' }
-        ];
+        
+        const depts = ["CSE", "ECE", "MECH", "CIVIL", "IT"];
+        const mockStudents = Array.from({ length: 50 }, (_, i) => ({
+          studentId: `7376211${depts[i % depts.length]}${(i + 1).toString().padStart(3, '0')}`,
+          name: `Student ${i + 1}`,
+          department: depts[i % depts.length]
+        }));
+        
         setStudents(mockStudents);
-        setRiskData({
-          '7376211CS101': { risk_score: 12.5, risk_level: 'Low' },
-          '7376211CS102': { risk_score: 85.2, risk_level: 'High' },
-          '7376211CS103': { risk_score: 45.0, risk_level: 'Medium' }
+        
+        const riskMap = {};
+        mockStudents.forEach(student => {
+          riskMap[student.studentId] = {
+            risk_score: Math.floor(Math.random() * 100),
+            risk_level: Math.random() > 0.7 ? 'High' : Math.random() > 0.4 ? 'Medium' : 'Low'
+          };
         });
+        setRiskData(riskMap);
       } finally {
         setIsLoading(false);
       }
