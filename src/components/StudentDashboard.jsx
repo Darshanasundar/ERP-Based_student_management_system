@@ -67,7 +67,8 @@ export default function StudentDashboard() {
             studentId: academicsRes.data.studentId || "STU001",
             course: `${academicsRes.data.department} - Year ${academicsRes.data.year}`,
             feeTotal: academicsRes.data.feeTotal || 85000,
-            feePaid: academicsRes.data.feePaid || 0
+            feePaid: academicsRes.data.feePaid || 0,
+            feeLedger: academicsRes.data.feeLedger || []
           });
           
           if (academicsRes.data.feeTotal && academicsRes.data.feePaid && academicsRes.data.feeTotal === academicsRes.data.feePaid) {
@@ -469,32 +470,34 @@ export default function StudentDashboard() {
 
             {/* Installment breakdown */}
             <div className="space-y-2 text-xs">
-              {STUDENT_DATA.feeDetails.receipts.map((rec) => {
-                const isPaid = rec.status === 'Paid' || feePaidSuccess;
+              {profileData.feeLedger && profileData.feeLedger.length > 0 ? profileData.feeLedger.map((rec) => {
+                const isPaid = rec.status === 'PAID' || feePaidSuccess;
                 return (
                   <div
                     key={rec.id}
                     className="p-2.5 rounded-lg border border-slate-100 flex items-center justify-between bg-slate-50/50"
                   >
                     <div>
-                      <span className="font-semibold text-slate-800 block">{rec.term}</span>
-                      <span className="text-[10px] text-slate-400">{rec.date}</span>
+                      <span className="font-semibold text-slate-800 block">{rec.feeStructure.feeType}</span>
+                      <span className="text-[10px] text-slate-400">Assigned: {rec.assignedDate}</span>
                     </div>
                     <div className="text-right">
                       <span className="font-bold text-slate-900 block">
-                        ₹{rec.amount.toLocaleString('en-IN')}
+                        ₹{rec.feeStructure.amount.toLocaleString('en-IN')}
                       </span>
                       <span
                         className={`text-[10px] font-semibold ${
                           isPaid ? 'text-emerald-600' : 'text-amber-600'
                         }`}
                       >
-                        {isPaid ? 'Cleared ✓' : 'Due Soon'}
+                        {isPaid ? 'Cleared ✓' : `Due: ${rec.dueDate}`}
                       </span>
                     </div>
                   </div>
                 );
-              })}
+              }) : (
+                <p className="text-center text-slate-400 py-2">No detailed fee records found.</p>
+              )}
             </div>
           </div>
 

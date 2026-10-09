@@ -21,6 +21,7 @@ public class StudentController {
     private final MarkRepository markRepository;
     private final com.edumanage.repository.StudentRepository studentRepository;
     private final com.edumanage.repository.UserRepository userRepository;
+    private final com.edumanage.repository.StudentFeeRepository studentFeeRepository;
 
     private String getAuthenticatedStudentId() {
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
@@ -41,6 +42,7 @@ public class StudentController {
         double attendancePercentage = totalDays > 0 ? ((double) presentCount / totalDays) * 100 : 93.0;
         
         List<Mark> recentMarks = markRepository.findByStudentId(studentId);
+        List<com.edumanage.model.StudentFee> feeLedger = studentFeeRepository.findByStudentId(studentId);
 
         StudentDashboardDTO response = new StudentDashboardDTO();
         response.setStudentId(student.getStudentId());
@@ -53,6 +55,7 @@ public class StudentController {
         response.setAttendancePercentage(Math.round(attendancePercentage * 100.0) / 100.0);
         response.setCurrentCgpa(7.73); // Mock CGPA
         response.setRecentMarks(recentMarks);
+        response.setFeeLedger(feeLedger);
 
         return ResponseEntity.ok(response);
     }
@@ -83,5 +86,6 @@ public class StudentController {
         private double attendancePercentage;
         private double currentCgpa;
         private List<Mark> recentMarks;
+        private List<com.edumanage.model.StudentFee> feeLedger;
     }
 }

@@ -18,6 +18,9 @@ public class FeeController {
     @Autowired
     private com.edumanage.repository.FeeStructureRepository feeStructureRepository;
 
+    @Autowired
+    private com.edumanage.repository.StudentFeeRepository studentFeeRepository;
+
     @GetMapping("/structures")
     public ResponseEntity<List<com.edumanage.model.FeeStructure>> getFeeStructures() {
         return ResponseEntity.ok(feeStructureRepository.findAll());
@@ -26,6 +29,16 @@ public class FeeController {
     @PostMapping("/structures")
     public ResponseEntity<com.edumanage.model.FeeStructure> createFeeStructure(@RequestBody com.edumanage.model.FeeStructure structure) {
         return ResponseEntity.ok(feeStructureRepository.save(structure));
+    }
+
+    @GetMapping("/student-fees/{studentId}")
+    public ResponseEntity<List<com.edumanage.model.StudentFee>> getStudentFees(@PathVariable String studentId) {
+        return ResponseEntity.ok(studentFeeRepository.findByStudentId(studentId));
+    }
+
+    @PostMapping("/student-fees")
+    public ResponseEntity<com.edumanage.model.StudentFee> assignFeeToStudent(@RequestBody com.edumanage.model.StudentFee studentFee) {
+        return ResponseEntity.ok(studentFeeRepository.save(studentFee));
     }
 
     @GetMapping
