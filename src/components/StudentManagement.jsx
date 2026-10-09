@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import ExcelUpload from './ExcelUpload';
 import { COLLEGE_INFO } from '../data/mockData';
+import AddStudentForm from './forms/AddStudentForm';
 
 export default function StudentManagement() {
   const [showUpload, setShowUpload] = useState(false);
@@ -20,9 +21,9 @@ export default function StudentManagement() {
   
   const [students, setStudents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddFormOpen, setIsAddFormOpen] = useState(false);
 
-  React.useEffect(() => {
-    const fetchStudents = async () => {
+  const fetchStudents = async () => {
       try {
         const { default: api } = await import('../services/api');
         const res = await api.get('/admin/students');
@@ -52,6 +53,8 @@ export default function StudentManagement() {
         setIsLoading(false);
       }
     };
+
+  React.useEffect(() => {
     fetchStudents();
   }, []);
 
@@ -86,7 +89,7 @@ export default function StudentManagement() {
             <Upload className="w-4 h-4" />
             {showUpload ? 'Close Upload' : 'Bulk Upload (.xlsx)'}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all hover:-translate-y-0.5">
+          <button onClick={() => setIsAddFormOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all hover:-translate-y-0.5">
             <UserPlus className="w-4 h-4" />
             Add Single
           </button>
@@ -212,6 +215,15 @@ export default function StudentManagement() {
         </div>
 
       </div>
+
+      {isAddFormOpen && (
+        <AddStudentForm 
+          onClose={() => setIsAddFormOpen(false)} 
+          onSuccess={() => {
+            fetchStudents();
+          }}
+        />
+      )}
     </div>
   );
 }

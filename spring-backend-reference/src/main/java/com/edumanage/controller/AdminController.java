@@ -47,6 +47,31 @@ public class AdminController {
         return ResponseEntity.ok(studentRepository.findAll());
     }
 
+    @PostMapping("/students")
+    public ResponseEntity<com.edumanage.model.Student> addStudent(@RequestBody com.edumanage.model.Student student) {
+        return ResponseEntity.ok(studentRepository.save(student));
+    }
+
+    @GetMapping("/faculty")
+    public ResponseEntity<java.util.List<com.edumanage.model.Faculty>> getAllFaculty() {
+        return ResponseEntity.ok(facultyRepository.findAll());
+    }
+
+    @PostMapping("/faculty")
+    public ResponseEntity<com.edumanage.model.Faculty> addFaculty(@RequestBody com.edumanage.model.Faculty faculty) {
+        return ResponseEntity.ok(facultyRepository.save(faculty));
+    }
+
+    @GetMapping("/subjects")
+    public ResponseEntity<java.util.List<com.edumanage.model.Subject>> getAllSubjects() {
+        return ResponseEntity.ok(subjectRepository.findAll());
+    }
+
+    @PostMapping("/subjects")
+    public ResponseEntity<com.edumanage.model.Subject> addSubject(@RequestBody com.edumanage.model.Subject subject) {
+        return ResponseEntity.ok(subjectRepository.save(subject));
+    }
+
     @GetMapping("/dashboard-stats")
     public ResponseEntity<Map<String, Object>> getDashboardStats() {
         Map<String, Object> stats = new HashMap<>();

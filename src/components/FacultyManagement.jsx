@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Plus, Edit, Trash2, ChevronDown, UserCheck, AlertCircle } from 'lucide-react';
 import api from '../services/api';
+import AddFacultyForm from './forms/AddFacultyForm';
 
 export default function FacultyManagement() {
   const [faculty, setFaculty] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddFormOpen, setIsAddFormOpen] = useState(false);
 
   useEffect(() => {
     fetchFaculty();
@@ -54,7 +56,7 @@ export default function FacultyManagement() {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Faculty Directory</h1>
           <p className="text-sm text-slate-500 mt-1">Manage professorship profiles and assignments.</p>
         </div>
-        <button onClick={() => alert('Open Add Faculty Modal')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all hover:-translate-y-0.5">
+        <button onClick={() => setIsAddFormOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all hover:-translate-y-0.5">
           <Plus className="w-4 h-4" />
           Add New Faculty
         </button>
@@ -118,6 +120,15 @@ export default function FacultyManagement() {
           )}
         </div>
       </div>
+
+      {isAddFormOpen && (
+        <AddFacultyForm 
+          onClose={() => setIsAddFormOpen(false)} 
+          onSuccess={() => {
+            fetchFaculty();
+          }}
+        />
+      )}
     </div>
   );
 }

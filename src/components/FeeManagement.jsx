@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Plus, ChevronDown, CheckCircle, Clock } from 'lucide-react';
 import api from '../services/api';
+import RecordPaymentForm from './forms/RecordPaymentForm';
 
 export default function FeeManagement() {
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
 
   useEffect(() => {
     fetchFees();
@@ -43,7 +45,7 @@ export default function FeeManagement() {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Fee Accounting</h1>
           <p className="text-sm text-slate-500 mt-1">Audit fee reconciliations and payments.</p>
         </div>
-        <button onClick={() => alert('Open Record Payment Modal')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all">
+        <button onClick={() => setIsPaymentFormOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all">
           <Plus className="w-4 h-4" />
           Record Offline Payment
         </button>
@@ -111,6 +113,15 @@ export default function FeeManagement() {
           )}
         </div>
       </div>
+
+      {isPaymentFormOpen && (
+        <RecordPaymentForm 
+          onClose={() => setIsPaymentFormOpen(false)} 
+          onSuccess={() => {
+            fetchFees();
+          }}
+        />
+      )}
     </div>
   );
 }

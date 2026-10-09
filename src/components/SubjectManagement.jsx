@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Plus, Edit, Trash2, ChevronDown } from 'lucide-react';
 import api from '../services/api';
+import AddSubjectForm from './forms/AddSubjectForm';
 
 export default function SubjectManagement() {
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddFormOpen, setIsAddFormOpen] = useState(false);
 
   useEffect(() => {
     fetchSubjects();
@@ -53,7 +55,7 @@ export default function SubjectManagement() {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Curriculum & Subjects</h1>
           <p className="text-sm text-slate-500 mt-1">Manage course syllabus and allocations.</p>
         </div>
-        <button onClick={() => alert('Open Add Subject Modal')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all">
+        <button onClick={() => setIsAddFormOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all">
           <Plus className="w-4 h-4" />
           Add New Subject
         </button>
@@ -116,6 +118,15 @@ export default function SubjectManagement() {
           )}
         </div>
       </div>
+
+      {isAddFormOpen && (
+        <AddSubjectForm 
+          onClose={() => setIsAddFormOpen(false)} 
+          onSuccess={() => {
+            fetchSubjects();
+          }}
+        />
+      )}
     </div>
   );
 }
