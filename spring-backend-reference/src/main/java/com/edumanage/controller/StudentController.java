@@ -20,15 +20,19 @@ public class StudentController {
     private final AttendanceRepository attendanceRepository;
     private final MarkRepository markRepository;
     private final com.edumanage.repository.StudentRepository studentRepository;
+    private final com.edumanage.repository.UserRepository userRepository;
+
+    private String getAuthenticatedStudentId() {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        com.edumanage.model.User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        return user.getReferenceId();
+    }
 
     @GetMapping("/dashboard")
-    public ResponseEntity<StudentDashboardDTO> getStudentDashboard(
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        
-        // Mock extracting student ID from JWT token. In real production, use SecurityContextHolder.
-        // The seeder generates IDs like "7376211CSE001". We will use the first seeded student.
-        String studentId = "7376211CSE001"; 
-
+    public ResponseEntity<StudentDashboardDTO> getStudentDashboard() {
+        String studentId = getAuthenticatedStudentId();
         com.edumanage.model.Student student = studentRepository.findByStudentId(studentId)
                 .orElseThrow(() -> new RuntimeException("Student Profile Not Found"));
 
@@ -54,9 +58,18 @@ public class StudentController {
     }
 
     @GetMapping("/my-academics")
-    public ResponseEntity<StudentDashboardDTO> getMyAcademics(
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        return getStudentDashboard(token);
+    public ResponseEntity<StudentDashboardDTO> getMyAcademics() {
+        return getStudentDashboard();
+    }
+
+    @GetMapping("/attendance/detailed")
+    public ResponseEntity<List<com.edumanage.model.Attendance>> getDetailedAttendance() {
+        return ResponseEntity.ok(attendanceRepository.findByStudentId(getAuthenticatedStudentId()));
+    }
+
+    @GetMapping("/marks")
+    public ResponseEntity<List<Mark>> getDetailedMarks() {
+        return ResponseEntity.ok(markRepository.findByStudentId(getAuthenticatedStudentId()));
     }
 
     @Data

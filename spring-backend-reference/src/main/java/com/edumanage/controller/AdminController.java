@@ -20,6 +20,8 @@ public class AdminController {
 
     private final ExcelUploadService excelUploadService;
     private final StudentRepository studentRepository;
+    private final com.edumanage.repository.FacultyRepository facultyRepository;
+    private final com.edumanage.repository.SubjectRepository subjectRepository;
 
     @PostMapping("/students/upload")
     public ResponseEntity<Map<String, String>> uploadStudentsFile(@RequestParam("file") MultipartFile file) {
@@ -50,15 +52,16 @@ public class AdminController {
         Map<String, Object> stats = new HashMap<>();
         
         long totalStudents = studentRepository.count();
+        long totalFaculty = facultyRepository.count();
+        long totalSubjects = subjectRepository.count();
         BigDecimal pendingFees = studentRepository.getTotalPendingFees();
         if (pendingFees == null) {
             pendingFees = BigDecimal.ZERO;
         }
 
-        // We can add mock values here for remaining stats just for dashboard completeness
         stats.put("totalStudents", totalStudents);
-        stats.put("totalFaculty", 6); // Mocked for now
-        stats.put("subjects", 60);    // Mocked for now
+        stats.put("totalFaculty", totalFaculty);
+        stats.put("subjects", totalSubjects);
         stats.put("pendingFees", "₹" + pendingFees.toPlainString());
 
         return ResponseEntity.ok(stats);

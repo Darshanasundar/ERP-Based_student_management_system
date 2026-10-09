@@ -27,12 +27,16 @@ public class FacultyController {
     private final MarkRepository markRepository;
     private final com.edumanage.service.RiskPredictionService riskPredictionService;
     private final com.edumanage.repository.FacultyAssignmentRepository facultyAssignmentRepository;
+    private final com.edumanage.repository.UserRepository userRepository;
 
     @GetMapping("/assignments")
-    public ResponseEntity<List<com.edumanage.model.FacultyAssignment>> getMyAssignments(
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        // Hardcoded employee ID for demo purposes, normally extracted from JWT
-        String employeeId = "FAC101"; 
+    public ResponseEntity<List<com.edumanage.model.FacultyAssignment>> getMyAssignments() {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        com.edumanage.model.User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+            
+        String employeeId = user.getReferenceId();
         return ResponseEntity.ok(facultyAssignmentRepository.findByEmployeeId(employeeId));
     }
 

@@ -42,29 +42,44 @@ export default function StudentDashboard() {
       courseId: r.code
     }))
   });
+  
+  const [detailedAttendance, setDetailedAttendance] = useState([]);
+  const [detailedMarks, setDetailedMarks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchAcademics = async () => {
       try {
-        const response = await api.get('/student/my-academics');
-        if (response.data) {
+        const [academicsRes, attendanceRes, marksRes] = await Promise.all([
+          api.get('/student/my-academics'),
+          api.get('/student/attendance/detailed'),
+          api.get('/student/marks')
+        ]);
+
+        if (academicsRes.data) {
           setAcademicData({
-            attendancePercentage: response.data.attendancePercentage,
-            currentCgpa: response.data.currentCgpa,
-            recentMarks: response.data.recentMarks || []
+            attendancePercentage: academicsRes.data.attendancePercentage,
+            currentCgpa: academicsRes.data.currentCgpa,
+            recentMarks: academicsRes.data.recentMarks || []
           });
           setProfileData({
-            name: response.data.name || "Student",
-            studentId: response.data.studentId || "STU001",
-            course: `${response.data.department} - Year ${response.data.year}`,
-            feeTotal: response.data.feeTotal || 85000,
-            feePaid: response.data.feePaid || 0
+            name: academicsRes.data.name || "Student",
+            studentId: academicsRes.data.studentId || "STU001",
+            course: `${academicsRes.data.department} - Year ${academicsRes.data.year}`,
+            feeTotal: academicsRes.data.feeTotal || 85000,
+            feePaid: academicsRes.data.feePaid || 0
           });
           
-          if (response.data.feeTotal && response.data.feePaid && response.data.feeTotal === response.data.feePaid) {
+          if (academicsRes.data.feeTotal && academicsRes.data.feePaid && academicsRes.data.feeTotal === academicsRes.data.feePaid) {
             setFeePaidSuccess(true);
           }
+        }
+
+        if (attendanceRes.data) {
+          setDetailedAttendance(attendanceRes.data);
+        }
+        if (marksRes.data) {
+          setDetailedMarks(marksRes.data);
         }
       } catch (error) {
         console.warn('Backend not reachable, falling back to mock academic data.', error.message);
@@ -517,6 +532,71 @@ export default function StudentDashboard() {
                 <Download className="w-3.5 h-3.5" />
                 <span>Download Fee Receipt</span>
               </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Academics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {/* Attendance Breakdown */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-slate-800">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <h2 className="font-bold">Subject-wise Attendance</h2>
+            </div>
+          </div>
+          <div className="p-4 flex-1 overflow-auto max-h-64">
+            {detailedAttendance.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">No detailed attendance records found.</p>
+            ) : (
+              <div className="space-y-3">
+                {detailedAttendance.map((rec, i) => (
+                  <div key={i} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-white">
+                    <div>
+                      <p className="font-semibold text-slate-800 text-sm">{rec.courseId}</p>
+                      <p className="text-xs text-slate-400">{rec.date}</p>
+                    </div>
+                    <div>
+                      <span className={`px-2 py-1 rounded-md text-xs font-bold ${
+                        rec.status === 'PRESENT' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {rec.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Marks Breakdown */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-slate-800">
+              <Award className="w-4 h-4 text-blue-600" />
+              <h2 className="font-bold">Subject-wise Marks</h2>
+            </div>
+          </div>
+          <div className="p-4 flex-1 overflow-auto max-h-64">
+            {detailedMarks.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">No published marks found.</p>
+            ) : (
+              <div className="space-y-3">
+                {detailedMarks.map((m, i) => (
+                  <div key={i} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-white">
+                    <div>
+                      <p className="font-semibold text-slate-800 text-sm">{m.courseId}</p>
+                      <p className="text-xs text-slate-400">{m.examName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-slate-900 text-sm">{m.score} / {m.maxScore}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
