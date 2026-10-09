@@ -8,6 +8,7 @@ export default function FacultyManagement() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   useEffect(() => {
     fetchFaculty();
@@ -106,7 +107,7 @@ export default function FacultyManagement() {
                     <td className="py-4 px-6 text-slate-500">{f.email}</td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingRecord(f)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(f.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
@@ -124,6 +125,16 @@ export default function FacultyManagement() {
       {isAddFormOpen && (
         <AddFacultyForm 
           onClose={() => setIsAddFormOpen(false)} 
+          onSuccess={() => {
+            fetchFaculty();
+          }}
+        />
+      )}
+
+      {editingRecord && (
+        <AddFacultyForm 
+          initialData={editingRecord}
+          onClose={() => setEditingRecord(null)} 
           onSuccess={() => {
             fetchFaculty();
           }}

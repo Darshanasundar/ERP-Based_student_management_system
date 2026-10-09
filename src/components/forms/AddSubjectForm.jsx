@@ -2,8 +2,15 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { X } from 'lucide-react';
 
-const AddSubjectForm = ({ onClose, onSuccess }) => {
-  const [formData, setFormData] = useState({
+const AddSubjectForm = ({ onClose, onSuccess, initialData = null }) => {
+  const [formData, setFormData] = useState(initialData ? {
+    id: initialData.id,
+    code: initialData.subjectCode || initialData.code || '',
+    name: initialData.subjectName || initialData.name || '',
+    department: initialData.department || '',
+    semester: initialData.semester || 1,
+    credits: initialData.credits || 3
+  } : {
     code: '',
     name: '',
     department: '',
@@ -33,7 +40,7 @@ const AddSubjectForm = ({ onClose, onSuccess }) => {
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-slate-100">
-          <h3 className="font-bold text-slate-800">Add New Subject</h3>
+          <h3 className="font-bold text-slate-800">{initialData ? 'Edit Subject' : 'Add New Subject'}</h3>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-slate-400" />
           </button>
@@ -64,7 +71,7 @@ const AddSubjectForm = ({ onClose, onSuccess }) => {
           <div className="pt-4 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
             <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
-              {loading ? 'Adding...' : 'Add Subject'}
+              {loading ? 'Saving...' : (initialData ? 'Update Subject' : 'Add Subject')}
             </button>
           </div>
         </form>

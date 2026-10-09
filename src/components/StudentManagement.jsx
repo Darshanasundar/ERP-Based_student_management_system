@@ -22,6 +22,7 @@ export default function StudentManagement() {
   const [students, setStudents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const fetchStudents = async () => {
       try {
@@ -168,7 +169,7 @@ export default function StudentManagement() {
                         <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition">
+                        <button onClick={() => setEditingRecord(student)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition">
                           <Edit className="w-4 h-4" />
                         </button>
                         <button className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition">
@@ -219,6 +220,16 @@ export default function StudentManagement() {
       {isAddFormOpen && (
         <AddStudentForm 
           onClose={() => setIsAddFormOpen(false)} 
+          onSuccess={() => {
+            fetchStudents();
+          }}
+        />
+      )}
+
+      {editingRecord && (
+        <AddStudentForm 
+          initialData={editingRecord}
+          onClose={() => setEditingRecord(null)} 
           onSuccess={() => {
             fetchStudents();
           }}

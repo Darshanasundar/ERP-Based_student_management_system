@@ -8,6 +8,7 @@ export default function SubjectManagement() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   useEffect(() => {
     fetchSubjects();
@@ -107,7 +108,7 @@ export default function SubjectManagement() {
                     <td className="py-4 px-6 text-slate-900 font-bold">{s.credits}</td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingRecord(s)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(s.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
@@ -122,6 +123,16 @@ export default function SubjectManagement() {
       {isAddFormOpen && (
         <AddSubjectForm 
           onClose={() => setIsAddFormOpen(false)} 
+          onSuccess={() => {
+            fetchSubjects();
+          }}
+        />
+      )}
+
+      {editingRecord && (
+        <AddSubjectForm 
+          initialData={editingRecord}
+          onClose={() => setEditingRecord(null)} 
           onSuccess={() => {
             fetchSubjects();
           }}
