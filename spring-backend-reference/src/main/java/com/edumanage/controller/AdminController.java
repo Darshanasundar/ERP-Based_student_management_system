@@ -40,6 +40,11 @@ public class AdminController {
         }
     }
 
+    @GetMapping("/students")
+    public ResponseEntity<java.util.List<com.edumanage.model.Student>> getAllStudents() {
+        return ResponseEntity.ok(studentRepository.findAll());
+    }
+
     @GetMapping("/dashboard-stats")
     public ResponseEntity<Map<String, Object>> getDashboardStats() {
         Map<String, Object> stats = new HashMap<>();

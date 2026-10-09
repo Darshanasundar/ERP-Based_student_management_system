@@ -18,17 +18,42 @@ export default function StudentManagement() {
   const [showUpload, setShowUpload] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Dummy student data
-  const [students, setStudents] = useState([
-    { id: '7376211CS101', name: 'John Doe', dept: 'CSE', year: '4', status: 'Active' },
-    { id: '7376211CS102', name: 'Jane Smith', dept: 'CSE', year: '4', status: 'Active' },
-    { id: '7376211EC145', name: 'Alex Johnson', dept: 'ECE', year: '3', status: 'Active' },
-    { id: '7376211ME210', name: 'Rahul Sharma', dept: 'MECH', year: '2', status: 'Inactive' },
-    { id: '7376211CS255', name: 'Priya Patel', dept: 'CSE', year: '1', status: 'Active' },
-    { id: '7376211EC089', name: 'Michael Chen', dept: 'ECE', year: '4', status: 'Active' },
-    { id: '7376211ME002', name: 'Sarah Wilson', dept: 'MECH', year: '3', status: 'Active' },
-    { id: '7376211CS310', name: 'Arun Kumar', dept: 'CSE', year: '2', status: 'Active' },
-  ]);
+  const [students, setStudents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const { default: api } = await import('../services/api');
+        const res = await api.get('/admin/students');
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          const mappedStudents = res.data.map(s => ({
+            id: s.studentId,
+            name: s.name,
+            dept: s.department,
+            year: s.year,
+            status: 'Active' // We'll assume active for now
+          }));
+          setStudents(mappedStudents);
+        } else {
+          throw new Error("No data");
+        }
+      } catch (error) {
+        console.error("Failed to fetch students", error);
+        // Fallback to local mock data if backend fails
+        setStudents([
+          { id: '7376211CS101', name: 'John Doe', dept: 'CSE', year: '4', status: 'Active' },
+          { id: '7376211CS102', name: 'Jane Smith', dept: 'CSE', year: '4', status: 'Active' },
+          { id: '7376211EC145', name: 'Alex Johnson', dept: 'ECE', year: '3', status: 'Active' },
+          { id: '7376211ME210', name: 'Rahul Sharma', dept: 'MECH', year: '2', status: 'Inactive' },
+          { id: '7376211CS255', name: 'Priya Patel', dept: 'CSE', year: '1', status: 'Active' },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStudents();
+  }, []);
 
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
