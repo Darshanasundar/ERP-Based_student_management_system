@@ -36,20 +36,25 @@ export default function DashboardLayout({
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const navigationItems = currentRole === 'Faculty' ? [
-    { id: '/faculty/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: '/faculty/classes', label: 'My Classes', icon: Users },
-    { id: '/faculty/grading', label: 'Attendance & Marks', icon: ClipboardCheck },
-    { id: '/faculty/settings', label: 'Settings', icon: Settings },
-  ] : [
-    { id: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: '/students', label: 'Students', icon: GraduationCap },
-    { id: '/faculty', label: 'Faculty', icon: Users },
-    { id: '/subjects', label: 'Subjects', icon: BookOpen },
-    { id: '/fees', label: 'Fees', icon: CreditCard },
-    { id: '/reports', label: 'Reports', icon: FileBarChart2 },
-    { id: '/settings', label: 'Settings', icon: Settings },
-  ];
+  const navigationItems = 
+    currentRole === 'Faculty' ? [
+      { id: '/faculty/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: '/faculty/classes', label: 'My Classes', icon: Users },
+      { id: '/faculty/grading', label: 'Attendance & Marks', icon: ClipboardCheck },
+      { id: '/faculty/settings', label: 'Settings', icon: Settings },
+    ] : 
+    currentRole === 'Student' ? [
+      { id: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: '/settings', label: 'Settings', icon: Settings },
+    ] : [
+      { id: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: '/students', label: 'Students', icon: GraduationCap },
+      { id: '/faculty', label: 'Faculty', icon: Users },
+      { id: '/subjects', label: 'Subjects', icon: BookOpen },
+      { id: '/fees', label: 'Fees', icon: CreditCard },
+      { id: '/reports', label: 'Reports', icon: FileBarChart2 },
+      { id: '/settings', label: 'Settings', icon: Settings },
+    ];
 
   const notifications = [
     { id: 1, title: 'Fee Collection Update', desc: '₹1.2L collected in the last 24h', time: '10m ago', unread: true },
