@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  mysql-db:
+    image: mysql:8.0
+    container_name: erp-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: erp_db
+      MYSQL_USER: erp_user
+      MYSQL_PASSWORD: erp_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - erp-network
+
+  python-ml-service:
+    build: 
+      context: ./python-ml-microservice
+    container_name: erp-ml-predictor
+    ports:
+      - "8000:8000"
+    networks:
+      - erp-network
+
+  spring-backend:
+    build: 
+      context: ./spring-backend-reference
+    container_name: erp-spring-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/erp_db?useSSL=false&serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=erp_user
+      - SPRING_DATASOURCE_PASSWORD=erp_password
+      - PYTHON_SERVICE_URL=http://python-ml-service:8000/predict-risk
+    depends_on:
+      - mysql-db
+      - python-ml-service
+    networks:
+      - erp-network
+
+  react-frontend:
+    build: 
+      context: .
+    container_name: erp-react-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - spring-backend
+    networks:
+      - erp-network
+
+volumes:
+  mysql-data:
+
+networks:
+  erp-network:
+    driver: bridge
