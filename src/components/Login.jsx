@@ -19,7 +19,6 @@ import { DEMO_USERS, COLLEGE_INFO } from '../data/mockData';
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState(DEMO_USERS.admin.email);
   const [password, setPassword] = useState(DEMO_USERS.admin.password);
-  const [role, setRole] = useState('Admin');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +27,7 @@ export default function Login({ onLogin }) {
     e.preventDefault();
     setIsLoading(true);
     
-    let detectedRole = role;
+    let detectedRole = 'Admin';
     if (email.toLowerCase().endsWith('@student.com')) detectedRole = 'Student';
     else if (email.toLowerCase().endsWith('@faculty.com')) detectedRole = 'Faculty';
     else if (email.toLowerCase().endsWith('@admin.com')) detectedRole = 'Admin';
@@ -59,7 +58,6 @@ export default function Login({ onLogin }) {
     if (demo) {
       setEmail(demo.email);
       setPassword(demo.password);
-      setRole(demo.role);
     }
   };
 
@@ -137,24 +135,6 @@ export default function Login({ onLogin }) {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Role Dropdown */}
-            <div>
-              <label htmlFor="role" className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
-                Institutional Role
-              </label>
-              <div className="relative">
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition"
-                >
-                  <option value="Admin">System Administrator (Central ERP)</option>
-                  <option value="Faculty">Faculty / Professor (Academics & Labs)</option>
-                  <option value="Student">Student (B.Tech Degree Program)</option>
-                </select>
-              </div>
-            </div>
 
             {/* Email Address */}
             <div>
@@ -171,7 +151,7 @@ export default function Login({ onLogin }) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@edumanage.edu.in"
+                  placeholder="name@student.com / name@faculty.com / name@admin.com"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition"
                 />
               </div>
@@ -245,7 +225,7 @@ export default function Login({ onLogin }) {
                 </span>
               ) : (
                 <>
-                  <span>Sign In as {role}</span>
+                  <span>Sign In securely</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
@@ -267,7 +247,7 @@ export default function Login({ onLogin }) {
                 type="button"
                 onClick={() => handleQuickFill('Admin')}
                 className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${
-                  role === 'Admin'
+                  email.includes('@admin.com')
                     ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-sm'
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                 }`}
@@ -280,7 +260,7 @@ export default function Login({ onLogin }) {
                 type="button"
                 onClick={() => handleQuickFill('Faculty')}
                 className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${
-                  role === 'Faculty'
+                  email.includes('@faculty.com')
                     ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-sm'
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                 }`}
@@ -293,7 +273,7 @@ export default function Login({ onLogin }) {
                 type="button"
                 onClick={() => handleQuickFill('Student')}
                 className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-all ${
-                  role === 'Student'
+                  email.includes('@student.com')
                     ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-sm'
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                 }`}

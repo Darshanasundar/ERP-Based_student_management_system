@@ -7,7 +7,7 @@ export const COLLEGE_INFO = {
 
 export const DEMO_USERS = {
   admin: {
-    email: 'admin@edumanage.edu.in',
+    email: 'suresh.arumugam@admin.com',
     password: 'password123',
     role: 'Admin',
     name: 'Suresh Arumugam',
@@ -16,7 +16,7 @@ export const DEMO_USERS = {
     department: 'Central Administration',
   },
   faculty: {
-    email: 'sarah.johnson@edumanage.edu.in',
+    email: 'sarah.johnson@faculty.com',
     password: 'password123',
     role: 'Faculty',
     name: 'Dr. Sarah Johnson',
@@ -25,7 +25,7 @@ export const DEMO_USERS = {
     department: 'Computer Science & Engineering',
   },
   student: {
-    email: 'john.doe@edumanage.edu.in',
+    email: 'john.doe@student.com',
     password: 'password123',
     role: 'Student',
     name: 'John Doe',
