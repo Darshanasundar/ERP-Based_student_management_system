@@ -1244,6 +1244,22 @@ export default function FacultyDashboard() {
     return att < 65;
   }).length;
 
+  const selectedCourseScores = roster.map((s) => getStudentSubjectMark(s, selectedCourseId));
+  const selectedSubjectAvg = selectedCourseScores.length > 0
+    ? (selectedCourseScores.reduce((acc, m) => acc + (Number(m) || 0), 0) / selectedCourseScores.length).toFixed(1)
+    : '0';
+
+  const passingStudents = roster.filter((s) => getStudentSubjectMark(s, selectedCourseId) >= 50);
+  const selectedSubjectPassRate = roster.length > 0
+    ? Math.round((passingStudents.length / roster.length) * 100)
+    : 0;
+
+  const selectedSubjectAtRiskCount = roster.filter((s) => {
+    const mark = getStudentSubjectMark(s, selectedCourseId);
+    const diag = getStudentSubjectDiagnosis(s, selectedCourseId);
+    return diag.riskStatus === 'High Risk' || mark < 50;
+  }).length;
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
