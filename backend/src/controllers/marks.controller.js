@@ -198,6 +198,194 @@ async function recordMarks(req, res, next) {
 }
 
 /**
+ * Batch record or update marks for multiple students in a course
+ * POST /api/marks/batch
+ * Protected: SUPER_ADMIN, TEACHER
+ */
+async function batchRecordMarks(req, res, next) {
+  try {
+    const { course_id, records } = req.body;
+    if (!course_id || !Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'course_id and records array are required.',
+      });
+    }
+
+    const courseCheck = await db.query(
+      'SELECT id, name, credits FROM courses WHERE id = $1',
+      [course_id]
+    );
+
+    if (courseCheck.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Course record not found.',
+      });
+    }
+
+    const courseInfo = courseCheck.rows[0];
+    const updatedRecords = [];
+
+    for (const record of records) {
+      const { student_id, marks } = record;
+      if (!student_id || marks === undefined) continue;
+
+      const parsedScore = Math.max(0, Math.min(100, Number(marks) || 0));
+
+      let grade = 'F';
+      if (parsedScore >= 90) grade = 'O';
+      else if (parsedScore >= 80) grade = 'A+';
+      else if (parsedScore >= 70) grade = 'A';
+      else if (parsedScore >= 60) grade = 'B+';
+      else if (parsedScore >= 50) grade = 'B';
+
+      let attendanceRate = 85.0;
+      try {
+        const attRes = await db.query(
+          `SELECT 
+             COUNT(*) AS total_sessions,
+             COUNT(CASE WHEN status = 'PRESENT' THEN 1 END) AS present_count
+           FROM attendance 
+           WHERE student_id = $1 AND course_id = $2`,
+          [student_id, course_id]
+        );
+        if (attRes.rows.length > 0 && Number(attRes.rows[0].total_sessions) > 0) {
+          attendanceRate = (Number(attRes.rows[0].present_count) / Number(attRes.rows[0].total_sessions)) * 100;
+        }
+      } catch (attErr) {
+        console.warn('Attendance lookup warning:', attErr.message);
+      }
+
+      const riskAssessment = evaluateAcademicRisk({
+        marks: parsedScore,
+        attendancePercentage: attendanceRate,
+      });
+
+      const upsertQuery = `
+        INSERT INTO marks (student_id, course_id, internal_score, total_score, grade, risk_score, risk_status)
+        VALUES ($1, $2, $3, $3, $4, $5, $6)
+        ON CONFLICT (student_id, course_id)
+        DO UPDATE SET
+          internal_score = EXCLUDED.internal_score,
+          total_score = EXCLUDED.internal_score,
+          grade = EXCLUDED.grade,
+          risk_score = EXCLUDED.risk_score,
+          risk_status = EXCLUDED.risk_status,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING *;
+      `;
+
+      const result = await db.query(upsertQuery, [
+        student_id,
+        course_id,
+        parsedScore,
+        grade,
+        riskAssessment.riskScore,
+        riskAssessment.riskStatus,
+      ]);
+
+      const marksRecord = result.rows[0];
+
+      await delCache(`student:data:${student_id}`);
+      await delCache(`student:marks:${student_id}`);
+
+      updatedRecords.push({
+        id: marksRecord.id,
+        studentId: student_id,
+        courseId: course_id,
+        courseName: courseInfo.name,
+        internalScore: parseFloat(marksRecord.internal_score),
+        grade: marksRecord.grade,
+        riskScore: parseFloat(marksRecord.risk_score),
+        riskStatus: marksRecord.risk_status,
+        updatedAt: marksRecord.updated_at,
+        risk: riskAssessment,
+      });
+    }
+
+    await delCache('admin:metrics');
+    await delCache('high:risk:roster');
+
+    const io = getIo();
+    if (io) {
+      io.emit('MARKS_BATCH_UPDATED', {
+        course_id,
+        courseName: courseInfo.name,
+        updatedCount: updatedRecords.length,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return res.status(200).json({
+      message: `Batch marks updated successfully for ${updatedRecords.length} students in ${courseInfo.name}`,
+      courseId: course_id,
+      courseName: courseInfo.name,
+      records: updatedRecords,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * Get marks for all students in a specific course
+ * GET /api/marks/course/:courseId
+ */
+async function getCourseMarks(req, res, next) {
+  try {
+    const { courseId } = req.params;
+    const query = `
+      SELECT 
+        m.id,
+        m.student_id,
+        m.course_id,
+        m.internal_score,
+        m.external_score,
+        m.total_score,
+        m.grade,
+        m.risk_score,
+        m.risk_status,
+        m.updated_at,
+        s.enrollment_number,
+        u.email,
+        (
+          SELECT ROUND((COUNT(CASE WHEN a.status = 'PRESENT' THEN 1 END)::numeric / NULLIF(COUNT(*), 0) * 100), 1)
+          FROM attendance a
+          WHERE a.student_id = m.student_id AND a.course_id = m.course_id
+        ) AS live_attendance_percentage
+      FROM marks m
+      INNER JOIN students s ON m.student_id = s.id
+      INNER JOIN users u ON s.user_id = u.id
+      WHERE m.course_id = $1
+      ORDER BY m.updated_at DESC
+    `;
+
+    const result = await db.query(query, [courseId]);
+
+    return res.status(200).json({
+      courseId,
+      count: result.rows.length,
+      marks: result.rows.map((r) => ({
+        id: r.id,
+        studentId: r.student_id,
+        enrollmentNumber: r.enrollment_number,
+        email: r.email,
+        internalScore: parseFloat(r.internal_score),
+        totalScore: r.total_score ? parseFloat(r.total_score) : parseFloat(r.internal_score),
+        grade: r.grade,
+        riskScore: r.risk_score ? parseFloat(r.risk_score) : 0.12,
+        riskStatus: r.risk_status || 'Low Risk',
+        attendancePercentage: r.live_attendance_percentage !== null ? parseFloat(r.live_attendance_percentage) : 85.0,
+        updatedAt: r.updated_at,
+      })),
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
  * Get marks and 8-semester performance for a student (Write-Through Caching)
  * GET /api/marks/student/:studentId
  */
@@ -370,6 +558,8 @@ async function calculateRiskOnDemand(req, res, next) {
 
 module.exports = {
   recordMarks,
+  batchRecordMarks,
+  getCourseMarks,
   getStudentMarks,
   getHighRiskStudents,
   calculateRiskOnDemand,

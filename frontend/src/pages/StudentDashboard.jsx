@@ -399,11 +399,45 @@ export default function StudentDashboard() {
     api.get(`/marks/student/${ALEX_STUDENT_ID}`)
       .then((res) => {
         if (res.data?.marks && res.data.marks.length > 0) {
-          const first = res.data.marks[0];
+          const marksList = res.data.marks;
+          // Set highest risk
+          const highestRisk = marksList.reduce(
+            (max, m) => ((m.riskScore || 0) > (max.riskScore || 0) ? m : max),
+            marksList[0]
+          );
           setAiRiskData({
-            status: first.riskStatus || 'Low Risk',
-            score: first.riskScore || 0.12,
+            status: highestRisk.riskStatus || 'Low Risk',
+            score: highestRisk.riskScore || 0.12,
           });
+
+          // Update Semester 6 course records
+          setSemestersData((prev) =>
+            prev.map((sem) => {
+              if (sem.semNumber === 6) {
+                const updatedCourses = sem.courses.map((c) => {
+                  const match = marksList.find(
+                    (m) =>
+                      (m.courseName && c.title.toLowerCase().includes(m.courseName.toLowerCase())) ||
+                      (m.courseName && m.courseName.toLowerCase().includes(c.title.toLowerCase())) ||
+                      (c.code === '23CS601' && (m.courseName || '').toLowerCase().includes('data structures')) ||
+                      (c.code === '23CS602' && (m.courseName || '').toLowerCase().includes('database'))
+                  );
+                  if (match) {
+                    const sc = parseFloat(match.internalScore || 0);
+                    return {
+                      ...c,
+                      internal: Math.round(sc * 0.4),
+                      total: `${sc}`,
+                      grade: match.grade || (sc >= 90 ? 'Grade O' : sc >= 75 ? 'Grade A+' : sc >= 50 ? 'Grade B' : 'Grade F'),
+                    };
+                  }
+                  return c;
+                });
+                return { ...sem, courses: updatedCourses };
+              }
+              return sem;
+            })
+          );
         }
       })
       .catch((e) => console.warn('Marks fetch:', e));
@@ -483,12 +517,17 @@ export default function StudentDashboard() {
           prev.map((sem) => {
             if (sem.semNumber === 6) {
               const updatedCourses = sem.courses.map((c) => {
-                if (c.code === '23CS601' || c.title.toLowerCase().includes('data structures')) {
+                const isMatch =
+                  (data.courseName && c.title.toLowerCase().includes(data.courseName.toLowerCase())) ||
+                  (data.courseName && data.courseName.toLowerCase().includes(c.title.toLowerCase())) ||
+                  (c.code === '23CS601' && (data.courseName || '').toLowerCase().includes('data structures')) ||
+                  (c.code === '23CS602' && (data.courseName || '').toLowerCase().includes('database'));
+                if (isMatch) {
                   return {
                     ...c,
                     internal: Math.round(newScore * 0.4),
                     total: `${newScore}`,
-                    grade: data.grade || (newScore >= 90 ? 'Grade O' : newScore >= 75 ? 'Grade A+' : 'Grade B'),
+                    grade: data.grade || (newScore >= 90 ? 'Grade O' : newScore >= 75 ? 'Grade A+' : newScore >= 50 ? 'Grade B' : 'Grade F'),
                   };
                 }
                 return c;

@@ -36,18 +36,27 @@ import {
   RefreshCw,
   Sliders,
   ShieldAlert,
+  Table,
+  Layers,
+  BarChart2,
 } from 'lucide-react';
+
+const DEFAULT_COURSES = [
+  { id: '27d6a359-8570-4e13-b2a8-73e03546e31e', code: 'CS301', name: 'Data Structures & Algorithms', credits: 4, section: 'CSE - A' },
+  { id: '5bb138c2-848b-4ca3-9719-d8b8b07a719c', code: 'CS302', name: 'Introduction to Databases', credits: 3, section: 'CSE - B' },
+  { id: '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f', code: 'CS303', name: 'Operating Systems', credits: 4, section: 'CSE - A' },
+  { id: '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a', code: 'CS304', name: 'Computer Networks', credits: 3, section: 'CSE - B' },
+];
 
 export default function FacultyDashboard() {
   const { socket, isConnected } = useSocket();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'attendance';
 
-  const [courses, setCourses] = useState([
-    { id: '27d6a359-8570-4e13-b2a8-73e03546e31e', code: 'CS301', name: 'Data Structures & Algorithms', credits: 4, section: 'CSE - A' },
-    { id: '5bb138c2-848b-4ca3-9719-d8b8b07a719c', code: 'CS302', name: 'Introduction to Databases', credits: 3, section: 'CSE - B' },
-  ]);
+  const [courses, setCourses] = useState(DEFAULT_COURSES);
   const [selectedCourseId, setSelectedCourseId] = useState('27d6a359-8570-4e13-b2a8-73e03546e31e');
+  const [gradingViewMode, setGradingViewMode] = useState('single'); // 'single' | 'matrix'
+  const [highRiskSubjectFilter, setHighRiskSubjectFilter] = useState('ALL');
   const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [toastMessage, setToastMessage] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -218,9 +227,104 @@ export default function FacultyDashboard() {
     if (recommendations.length === 0) recommendations.push('Student is in good academic standing. Continue regular coursework.');
 
     return { riskScore: score, riskStatus: status, severityLevel: severity, primaryFactors: factors, recommendations };
+  };  // Grade calculation helper
+  const getGradeFromScore = (score) => {
+    const s = Number(score) || 0;
+    if (s >= 90) return 'O';
+    if (s >= 80) return 'A+';
+    if (s >= 70) return 'A';
+    if (s >= 60) return 'B+';
+    if (s >= 50) return 'B';
+    return 'F';
   };
 
-  // Student roster state: Alex Turner is the database-connected student; others represent apex cohorts
+  // Subject Marks Getters
+  const getStudentSubjectMark = (student, courseId) => {
+    if (student?.subjectMarks && student.subjectMarks[courseId]?.marks !== undefined) {
+      return Number(student.subjectMarks[courseId].marks);
+    }
+    return student?.marks !== undefined ? Number(student.marks) : 75;
+  };
+
+  const getStudentSubjectAttendance = (student, courseId) => {
+    if (student?.subjectMarks && student.subjectMarks[courseId]?.attendance !== undefined) {
+      return Number(student.subjectMarks[courseId].attendance);
+    }
+    return student?.attendancePercentage ?? (student?.attendancePresent ? 88.0 : 58.0);
+  };
+
+  const getStudentSubjectDiagnosis = (student, courseId) => {
+    const mark = getStudentSubjectMark(student, courseId);
+    const att = getStudentSubjectAttendance(student, courseId);
+    if (student?.subjectMarks?.[courseId]?.riskScore !== undefined) {
+      return {
+        riskScore: student.subjectMarks[courseId].riskScore,
+        riskStatus: student.subjectMarks[courseId].riskStatus,
+        severityLevel: student.subjectMarks[courseId].severityLevel || 'LOW',
+        primaryFactors: student.subjectMarks[courseId].primaryFactors || [],
+        recommendations: student.subjectMarks[courseId].recommendations || [],
+      };
+    }
+    return computeRiskDiagnosis(mark, att);
+  };
+
+  // Evaluate Overall / Cumulative Academic Risk across all enrolled subjects
+  const evaluateOverallStudentRisk = (subjectMarksMap, student) => {
+    let highestRiskScore = 0.05;
+    let anyHighRisk = false;
+    let anyMediumRisk = false;
+    const failingSubjects = [];
+    const allFactors = [];
+    const allRecommendations = [];
+
+    courses.forEach((c) => {
+      const data = subjectMarksMap?.[c.id];
+      const score = data?.marks !== undefined ? Number(data.marks) : (student.marks ?? 75);
+      const att = data?.attendance !== undefined ? Number(data.attendance) : (student.attendancePercentage ?? 85);
+      const diag = computeRiskDiagnosis(score, att);
+
+      if (diag.riskScore > highestRiskScore) {
+        highestRiskScore = diag.riskScore;
+      }
+      if (diag.riskStatus === 'High Risk' || score < 50 || att < 65) {
+        anyHighRisk = true;
+        failingSubjects.push(`${c.code} (${score}/100)`);
+        allFactors.push(`${c.name} (${c.code}): ${score}/100 is below passing threshold with ${att.toFixed(1)}% attendance.`);
+        allRecommendations.push(`Mandatory remedial advisory required for ${c.name}.`);
+      } else if (diag.riskStatus === 'Medium Risk' || score < 65 || att < 75) {
+        anyMediumRisk = true;
+        allFactors.push(`${c.code}: Continuous evaluation score of ${score}/100 requires monitoring.`);
+      }
+    });
+
+    let riskStatus = 'Low Risk';
+    let severityLevel = 'LOW';
+    if (anyHighRisk || highestRiskScore >= 0.70) {
+      riskStatus = 'High Risk';
+      severityLevel = highestRiskScore >= 0.85 ? 'CRITICAL' : 'HIGH';
+    } else if (anyMediumRisk || highestRiskScore >= 0.40) {
+      riskStatus = 'Medium Risk';
+      severityLevel = 'MODERATE';
+    }
+
+    if (allFactors.length === 0) {
+      allFactors.push('Satisfactory continuous assessment marks and attendance across all subjects.');
+    }
+    if (allRecommendations.length === 0) {
+      allRecommendations.push('Student is in good academic standing. Continue regular coursework.');
+    }
+
+    return {
+      riskScore: highestRiskScore,
+      riskStatus,
+      severityLevel,
+      primaryFactors: allFactors,
+      recommendations: allRecommendations,
+      failingSubjects,
+    };
+  };
+
+  // Student roster state with per-subject marks and risk indicators
   const [roster, setRoster] = useState([
     {
       id: '0937df8b-2b8f-49a7-bfee-84eace226eec',
@@ -228,17 +332,23 @@ export default function FacultyDashboard() {
       name: 'Alex Turner',
       email: 'alex.turner@erp.com',
       department: 'Computer Science & Engineering',
-      riskStatus: 'Low Risk',
-      riskScore: 0.12,
-      severityLevel: 'LOW',
+      riskStatus: 'High Risk',
+      riskScore: 0.72,
+      severityLevel: 'HIGH',
       attendancePresent: true,
-      attendancePercentage: 92,
-      marks: 92,
+      attendancePercentage: 88,
+      marks: 45,
       isLiveDbUser: true,
       lastSavedStatus: 'PRESENT',
       isGlowing: false,
-      primaryFactors: ['Satisfactory continuous assessment marks and attendance.'],
-      recommendations: ['Maintain current academic consistency.'],
+      primaryFactors: ['Academic Warning: 45/100 in Data Structures & Algorithms is below pass threshold.'],
+      recommendations: ['Assign supplemental problem sets and peer tutor in Data Structures.'],
+      subjectMarks: {
+        '27d6a359-8570-4e13-b2a8-73e03546e31e': { marks: 45, attendance: 88, grade: 'F', riskScore: 0.72, riskStatus: 'High Risk', severityLevel: 'HIGH' },
+        '5bb138c2-848b-4ca3-9719-d8b8b07a719c': { marks: 85, attendance: 94, grade: 'A+', riskScore: 0.12, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f': { marks: 78, attendance: 90, grade: 'A', riskScore: 0.18, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a': { marks: 82, attendance: 92, grade: 'A+', riskScore: 0.14, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+      },
     },
     {
       id: 'dummy-1',
@@ -255,8 +365,14 @@ export default function FacultyDashboard() {
       isLiveDbUser: false,
       lastSavedStatus: null,
       isGlowing: false,
-      primaryFactors: ['Consistent test scores and active lab participation.'],
+      primaryFactors: ['Consistent test scores and active lab participation across subjects.'],
       recommendations: ['Candidate for advanced honours track.'],
+      subjectMarks: {
+        '27d6a359-8570-4e13-b2a8-73e03546e31e': { marks: 88, attendance: 88, grade: 'A+', riskScore: 0.14, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '5bb138c2-848b-4ca3-9719-d8b8b07a719c': { marks: 85, attendance: 90, grade: 'A+', riskScore: 0.12, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f': { marks: 90, attendance: 92, grade: 'O', riskScore: 0.08, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a': { marks: 84, attendance: 86, grade: 'A+', riskScore: 0.15, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+      },
     },
     {
       id: 'dummy-2',
@@ -274,13 +390,19 @@ export default function FacultyDashboard() {
       lastSavedStatus: null,
       isGlowing: false,
       primaryFactors: [
-        'Academic Warning: 42/100 is below satisfactory passing threshold.',
+        'Academic Warning: 42/100 in CS301 is below satisfactory passing threshold.',
         'Severe Attendance Deficit: 58.0% is below 65% statutory debarment limit.'
       ],
       recommendations: [
-        'Schedule mandatory 1-on-1 remedial mentoring.',
+        'Schedule mandatory 1-on-1 remedial mentoring in CS301 Data Structures.',
         'Issue formal attendance warning notice to student and guardian.'
       ],
+      subjectMarks: {
+        '27d6a359-8570-4e13-b2a8-73e03546e31e': { marks: 42, attendance: 58, grade: 'F', riskScore: 0.84, riskStatus: 'High Risk', severityLevel: 'CRITICAL' },
+        '5bb138c2-848b-4ca3-9719-d8b8b07a719c': { marks: 68, attendance: 78, grade: 'B+', riskScore: 0.46, riskStatus: 'Medium Risk', severityLevel: 'MODERATE' },
+        '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f': { marks: 38, attendance: 54, grade: 'F', riskScore: 0.90, riskStatus: 'High Risk', severityLevel: 'CRITICAL' },
+        '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a': { marks: 74, attendance: 80, grade: 'A', riskScore: 0.22, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+      },
     },
     {
       id: 'dummy-3',
@@ -298,13 +420,19 @@ export default function FacultyDashboard() {
       lastSavedStatus: null,
       isGlowing: false,
       primaryFactors: [
-        'Borderline Score: 61/100 requires continuous evaluation tracking.',
+        'Borderline Score: 61/100 in CS301 requires continuous evaluation tracking.',
         'Low Attendance: 74.0% is below required 75% minimum.'
       ],
       recommendations: [
         'Encourage tutorial session attendance.',
         'Obtain absence justification from student.'
       ],
+      subjectMarks: {
+        '27d6a359-8570-4e13-b2a8-73e03546e31e': { marks: 61, attendance: 74, grade: 'B+', riskScore: 0.58, riskStatus: 'Medium Risk', severityLevel: 'MODERATE' },
+        '5bb138c2-848b-4ca3-9719-d8b8b07a719c': { marks: 70, attendance: 82, grade: 'A', riskScore: 0.24, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f': { marks: 64, attendance: 72, grade: 'B+', riskScore: 0.52, riskStatus: 'Medium Risk', severityLevel: 'MODERATE' },
+        '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a': { marks: 68, attendance: 76, grade: 'B+', riskScore: 0.28, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+      },
     },
     {
       id: 'dummy-4',
@@ -323,6 +451,12 @@ export default function FacultyDashboard() {
       isGlowing: false,
       primaryFactors: ['Satisfactory academic test scores and class attendance.'],
       recommendations: ['Student is in good academic standing.'],
+      subjectMarks: {
+        '27d6a359-8570-4e13-b2a8-73e03546e31e': { marks: 94, attendance: 96, grade: 'O', riskScore: 0.08, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '5bb138c2-848b-4ca3-9719-d8b8b07a719c': { marks: 92, attendance: 94, grade: 'O', riskScore: 0.09, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f': { marks: 96, attendance: 98, grade: 'O', riskScore: 0.06, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a': { marks: 91, attendance: 95, grade: 'O', riskScore: 0.09, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+      },
     },
     {
       id: 'dummy-5',
@@ -341,6 +475,12 @@ export default function FacultyDashboard() {
       isGlowing: false,
       primaryFactors: ['Continuous evaluation scores require regular monitoring.'],
       recommendations: ['Encourage regular tutorial participation.'],
+      subjectMarks: {
+        '27d6a359-8570-4e13-b2a8-73e03546e31e': { marks: 67, attendance: 80, grade: 'B+', riskScore: 0.52, riskStatus: 'Medium Risk', severityLevel: 'MODERATE' },
+        '5bb138c2-848b-4ca3-9719-d8b8b07a719c': { marks: 72, attendance: 84, grade: 'A', riskScore: 0.22, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f': { marks: 65, attendance: 78, grade: 'B+', riskScore: 0.48, riskStatus: 'Medium Risk', severityLevel: 'MODERATE' },
+        '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a': { marks: 70, attendance: 82, grade: 'A', riskScore: 0.24, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+      },
     },
     {
       id: 'dummy-6',
@@ -358,13 +498,19 @@ export default function FacultyDashboard() {
       lastSavedStatus: null,
       isGlowing: false,
       primaryFactors: [
-        'Critical Exam Score: 34/100 is severely below pass grade (40).',
+        'Critical Exam Score: 34/100 in CS301 is severely below pass grade (40).',
         'Severe Attendance Deficit: 52.0% is below 65% statutory debarment limit.'
       ],
       recommendations: [
-        'Schedule mandatory 1-on-1 remedial mentoring.',
+        'Schedule mandatory 1-on-1 remedial mentoring in CS301 Data Structures.',
         'Issue formal attendance warning notice to student and guardian.'
       ],
+      subjectMarks: {
+        '27d6a359-8570-4e13-b2a8-73e03546e31e': { marks: 34, attendance: 52, grade: 'F', riskScore: 0.94, riskStatus: 'High Risk', severityLevel: 'CRITICAL' },
+        '5bb138c2-848b-4ca3-9719-d8b8b07a719c': { marks: 72, attendance: 85, grade: 'A', riskScore: 0.22, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f': { marks: 40, attendance: 60, grade: 'B', riskScore: 0.82, riskStatus: 'High Risk', severityLevel: 'CRITICAL' },
+        '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a': { marks: 66, attendance: 75, grade: 'B+', riskScore: 0.44, riskStatus: 'Medium Risk', severityLevel: 'MODERATE' },
+      },
     },
     {
       id: 'dummy-7',
@@ -382,13 +528,19 @@ export default function FacultyDashboard() {
       lastSavedStatus: null,
       isGlowing: false,
       primaryFactors: [
-        'Academic Warning: 46/100 is below satisfactory passing threshold.',
+        'Academic Warning: 46/100 in CS301 is below satisfactory passing threshold.',
         'Severe Attendance Deficit: 62.0% is below 65% statutory debarment limit.'
       ],
       recommendations: [
-        'Assign supplemental problem sets and peer tutor.',
+        'Assign supplemental problem sets and peer tutor in CS301.',
         'Issue formal attendance warning notice.'
       ],
+      subjectMarks: {
+        '27d6a359-8570-4e13-b2a8-73e03546e31e': { marks: 46, attendance: 62, grade: 'F', riskScore: 0.76, riskStatus: 'High Risk', severityLevel: 'HIGH' },
+        '5bb138c2-848b-4ca3-9719-d8b8b07a719c': { marks: 64, attendance: 70, grade: 'B+', riskScore: 0.50, riskStatus: 'Medium Risk', severityLevel: 'MODERATE' },
+        '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f': { marks: 72, attendance: 80, grade: 'A', riskScore: 0.24, riskStatus: 'Low Risk', severityLevel: 'LOW' },
+        '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a': { marks: 48, attendance: 66, grade: 'F', riskScore: 0.74, riskStatus: 'High Risk', severityLevel: 'HIGH' },
+      },
     },
   ]);
 
@@ -402,15 +554,21 @@ export default function FacultyDashboard() {
       try {
         const courseRes = await api.get('/courses').catch(() => null);
         if (courseRes?.data?.courses && courseRes.data.courses.length > 0) {
-          const mappedCourses = courseRes.data.courses.map((c, idx) => ({
+          const dbCourses = courseRes.data.courses.map((c, idx) => ({
             id: c.id,
             code: `CS30${idx + 1}`,
             name: c.name,
             credits: c.credits,
-            section: 'CSE - A',
+            section: idx % 2 === 0 ? 'CSE - A' : 'CSE - B',
           }));
-          setCourses(mappedCourses);
-          setSelectedCourseId(mappedCourses[0].id);
+          const merged = [...dbCourses];
+          DEFAULT_COURSES.forEach((def) => {
+            if (!merged.some((c) => c.id === def.id || c.name.toLowerCase() === def.name.toLowerCase())) {
+              merged.push(def);
+            }
+          });
+          setCourses(merged);
+          setSelectedCourseId(merged[0].id);
         }
 
         // Check latest attendance for Alex Turner from DB
@@ -433,18 +591,35 @@ export default function FacultyDashboard() {
         // Check latest marks for Alex Turner from DB
         const marksRes = await api.get('/marks/student/0937df8b-2b8f-49a7-bfee-84eace226eec').catch(() => null);
         if (marksRes?.data?.marks && marksRes.data.marks.length > 0) {
-          const latestMark = marksRes.data.marks[0];
           setRoster((prev) =>
-            prev.map((s) =>
-              s.email === 'alex.turner@erp.com'
-                ? {
-                    ...s,
-                    marks: latestMark.internalScore,
-                    riskStatus: latestMark.riskStatus || s.riskStatus,
-                    riskScore: latestMark.riskScore || s.riskScore,
-                  }
-                : s
-            )
+            prev.map((s) => {
+              if (s.email !== 'alex.turner@erp.com') return s;
+              const updatedSubjMarks = { ...(s.subjectMarks || {}) };
+              marksRes.data.marks.forEach((m) => {
+                const diag = computeRiskDiagnosis(m.internalScore, m.attendancePercentage || 88);
+                updatedSubjMarks[m.courseId] = {
+                  marks: m.internalScore,
+                  attendance: m.attendancePercentage || 88,
+                  grade: m.grade || getGradeFromScore(m.internalScore),
+                  riskScore: m.riskScore !== undefined ? m.riskScore : diag.riskScore,
+                  riskStatus: m.riskStatus || diag.riskStatus,
+                  severityLevel: diag.severityLevel,
+                  primaryFactors: diag.primaryFactors,
+                  recommendations: diag.recommendations,
+                };
+              });
+              const overall = evaluateOverallStudentRisk(updatedSubjMarks, s);
+              return {
+                ...s,
+                marks: updatedSubjMarks[selectedCourseId]?.marks ?? s.marks,
+                subjectMarks: updatedSubjMarks,
+                riskStatus: overall.riskStatus,
+                riskScore: overall.riskScore,
+                severityLevel: overall.severityLevel,
+                primaryFactors: overall.primaryFactors,
+                recommendations: overall.recommendations,
+              };
+            })
           );
         }
       } catch (err) {
@@ -463,12 +638,37 @@ export default function FacultyDashboard() {
 
     const handleMarksUpdated = (data) => {
       console.log('[WebSocket Event: Faculty] MARKS_UPDATED received:', data);
+      const targetCourseId = data.course_id;
+      const newScore = data.internal_score !== undefined ? data.internal_score : data.marks;
+      if (newScore === undefined) return;
+
       setRoster((prev) =>
         prev.map((s) => {
           if (s.id === data.student_id || (s.isLiveDbUser && data.student_id === '0937df8b-2b8f-49a7-bfee-84eace226eec')) {
+            const currentSubj = s.subjectMarks?.[targetCourseId] || {};
+            const attRate = currentSubj.attendance ?? s.attendancePercentage ?? 88;
+            const diag = computeRiskDiagnosis(newScore, attRate);
+
+            const updatedSubj = {
+              ...(s.subjectMarks || {}),
+              [targetCourseId]: {
+                ...currentSubj,
+                marks: newScore,
+                grade: data.grade || getGradeFromScore(newScore),
+                riskScore: data.risk_score !== undefined ? data.risk_score : diag.riskScore,
+                riskStatus: data.risk_status || diag.riskStatus,
+                severityLevel: diag.severityLevel,
+              },
+            };
+            const overall = evaluateOverallStudentRisk(updatedSubj, s);
+
             return {
               ...s,
-              marks: data.internal_score !== undefined ? data.internal_score : s.marks,
+              marks: targetCourseId === selectedCourseId ? newScore : s.marks,
+              subjectMarks: updatedSubj,
+              riskStatus: overall.riskStatus,
+              riskScore: overall.riskScore,
+              severityLevel: overall.severityLevel,
               isGlowing: true,
             };
           }
@@ -512,7 +712,7 @@ export default function FacultyDashboard() {
       socket.off('MARKS_UPDATED', handleMarksUpdated);
       socket.off('RISK_UPDATED', handleRiskUpdated);
     };
-  }, [socket]);
+  }, [socket, selectedCourseId, courses]);
 
   const selectedCourse = courses.find((c) => c.id === selectedCourseId) || courses[0];
 
@@ -524,16 +724,14 @@ export default function FacultyDashboard() {
     const newPresent = !targetStudent.attendancePresent;
     const newStatus = newPresent ? 'PRESENT' : 'ABSENT';
 
-    // Update local state immediately
     setRoster((prev) =>
       prev.map((s) => (s.id === id ? { ...s, attendancePresent: newPresent } : s))
     );
 
-    // If this is Alex Turner (connected to DB), immediately save to PostgreSQL
     if (targetStudent.isLiveDbUser) {
       try {
         await api.post('/attendance', {
-          student_id: targetStudent.id,
+          student_id: id,
           course_id: selectedCourse.id,
           attendance_date: attendanceDate,
           status: newStatus,
@@ -553,122 +751,252 @@ export default function FacultyDashboard() {
     }
   };
 
-  const handleMarkChange = (id, newMark) => {
+  // Subject-Wise Marks Change Handler
+  const handleSubjectMarkChange = (studentId, courseId, newMark) => {
     const val = Math.max(0, Math.min(100, Number(newMark) || 0));
     setRoster((prev) =>
       prev.map((student) => {
-        if (student.id === id) {
-          return { ...student, marks: val };
-        }
-        return student;
+        if (student.id !== studentId) return student;
+
+        const currentSubj = student.subjectMarks?.[courseId] || {};
+        const attRate = currentSubj.attendance ?? student.attendancePercentage ?? 85;
+        const diag = computeRiskDiagnosis(val, attRate);
+        const grade = getGradeFromScore(val);
+
+        const updatedSubjMarks = {
+          ...(student.subjectMarks || {}),
+          [courseId]: {
+            ...currentSubj,
+            marks: val,
+            attendance: attRate,
+            grade,
+            riskScore: diag.riskScore,
+            riskStatus: diag.riskStatus,
+            severityLevel: diag.severityLevel,
+            primaryFactors: diag.primaryFactors,
+            recommendations: diag.recommendations,
+          },
+        };
+
+        const overall = evaluateOverallStudentRisk(updatedSubjMarks, student);
+
+        return {
+          ...student,
+          marks: courseId === selectedCourseId ? val : student.marks,
+          subjectMarks: updatedSubjMarks,
+          riskScore: overall.riskScore,
+          riskStatus: overall.riskStatus,
+          severityLevel: overall.severityLevel,
+          primaryFactors: overall.primaryFactors,
+          recommendations: overall.recommendations,
+        };
       })
     );
   };
 
-  // Submit Marks & Enhanced Multi-Factor AI Risk Assessment
-  const handleSaveMarksAndAssessRisk = async (student) => {
-    try {
-      setToastMessage(`🧠 AI Risk Engine: Evaluating continuous metrics for ${student.name} (Marks: ${student.marks})...`);
+  const handleMarkChange = (id, newMark) => {
+    handleSubjectMarkChange(id, selectedCourseId, newMark);
+  };
 
-      let newRiskScore = student.riskScore;
-      let newRiskStatus = student.riskStatus;
-      let newSeverity = student.severityLevel || 'LOW';
+  // Submit Marks & Enhanced Multi-Factor AI Risk Assessment for a Subject
+  const handleSaveSubjectMarksAndAssessRisk = async (student, courseId = selectedCourseId) => {
+    const currentMark = getStudentSubjectMark(student, courseId);
+    const targetCourse = courses.find((c) => c.id === courseId) || selectedCourse;
+
+    try {
+      setToastMessage(`🧠 AI Risk Engine: Evaluating continuous metrics for ${student.name} in ${targetCourse.name} (Marks: ${currentMark})...`);
+
+      let newRiskScore = 0.20;
+      let newRiskStatus = 'Low Risk';
+      let newSeverity = 'LOW';
+      let newGrade = getGradeFromScore(currentMark);
       let riskDiag = null;
 
       if (student.isLiveDbUser) {
         const res = await api.post('/marks', {
           student_id: student.id,
-          course_id: selectedCourse.id,
-          marks: student.marks,
+          course_id: courseId,
+          marks: currentMark,
         });
 
         if (res.data?.marks) {
           newRiskScore = res.data.marks.riskScore;
           newRiskStatus = res.data.marks.riskStatus;
+          newGrade = res.data.marks.grade;
         }
         if (res.data?.risk) {
           riskDiag = res.data.risk;
           newSeverity = res.data.risk.severityLevel;
         }
       } else {
-        const attRate = student.attendancePercentage ?? (student.attendancePresent ? 88.0 : 58.0);
-        // Instant synchronous calculation
-        riskDiag = computeRiskDiagnosis(student.marks, attRate);
+        const attRate = getStudentSubjectAttendance(student, courseId);
+        riskDiag = computeRiskDiagnosis(currentMark, attRate);
         newRiskScore = riskDiag.riskScore;
         newRiskStatus = riskDiag.riskStatus;
         newSeverity = riskDiag.severityLevel;
+        newGrade = getGradeFromScore(currentMark);
       }
 
       setRoster((prev) =>
-        prev.map((s) =>
-          s.id === student.id
-            ? {
-                ...s,
-                marks: student.marks,
-                riskScore: newRiskScore,
-                riskStatus: newRiskStatus,
-                severityLevel: newSeverity,
-                primaryFactors: riskDiag?.primaryFactors || s.primaryFactors,
-                recommendations: riskDiag?.recommendations || s.recommendations,
-                isGlowing: true,
-              }
-            : s
-        )
+        prev.map((s) => {
+          if (s.id !== student.id) return s;
+
+          const updatedSubjMarks = {
+            ...(s.subjectMarks || {}),
+            [courseId]: {
+              ...(s.subjectMarks?.[courseId] || {}),
+              marks: currentMark,
+              grade: newGrade,
+              riskScore: newRiskScore,
+              riskStatus: newRiskStatus,
+              severityLevel: newSeverity,
+              primaryFactors: riskDiag?.primaryFactors || [],
+              recommendations: riskDiag?.recommendations || [],
+            },
+          };
+
+          const overall = evaluateOverallStudentRisk(updatedSubjMarks, s);
+
+          return {
+            ...s,
+            marks: courseId === selectedCourseId ? currentMark : s.marks,
+            subjectMarks: updatedSubjMarks,
+            riskScore: overall.riskScore,
+            riskStatus: overall.riskStatus,
+            severityLevel: overall.severityLevel,
+            primaryFactors: overall.primaryFactors,
+            recommendations: overall.recommendations,
+            isGlowing: true,
+          };
+        })
       );
 
       const statusTag = newRiskStatus === 'High Risk' ? '⚠️ High Risk' : newRiskStatus === 'Medium Risk' ? '⚡ Medium Risk' : '✓ Low Risk';
       setToastMessage(
-        `✓ AI Assessment Complete: ${student.name} evaluated as ${statusTag} (Risk Index: ${Math.round(newRiskScore * 100)}%)!`
+        `✓ AI Assessment Complete: ${student.name} evaluated in "${targetCourse.name}" as ${statusTag} (Risk Index: ${Math.round(newRiskScore * 100)}%)!`
       );
       setTimeout(() => {
         setRoster((prev) => prev.map((s) => ({ ...s, isGlowing: false })));
         setToastMessage(null);
       }, 4000);
     } catch (err) {
-      console.error('Error saving marks:', err);
-      // Fallback calculation so faculty is never blocked
-      const localDiag = computeRiskDiagnosis(student.marks, student.attendancePresent ? 85 : 55);
-      setRoster((prev) =>
-        prev.map((s) =>
-          s.id === student.id
-            ? {
-                ...s,
-                riskScore: localDiag.riskScore,
-                riskStatus: localDiag.riskStatus,
-                severityLevel: localDiag.severityLevel,
-                primaryFactors: localDiag.primaryFactors,
-                recommendations: localDiag.recommendations,
-              }
-            : s
-        )
-      );
+      console.error('Error saving subject marks:', err);
+      const attRate = getStudentSubjectAttendance(student, courseId);
+      const localDiag = computeRiskDiagnosis(currentMark, attRate);
       setToastMessage(`✓ Evaluated locally: ${localDiag.riskStatus} (${Math.round(localDiag.riskScore * 100)}% Risk)`);
       setTimeout(() => setToastMessage(null), 3500);
     }
   };
 
-  // Re-evaluate entire course roster using AI Risk Engine
-  const handleReevaluateAll = async () => {
-    setEvaluatingAll(true);
-    setToastMessage('🧠 AI Risk Engine: Performing multi-factor risk inference across all students...');
+  const handleSaveMarksAndAssessRisk = (student) => {
+    handleSaveSubjectMarksAndAssessRisk(student, selectedCourseId);
+  };
+
+  // Batch Save all marks for the selected course
+  const handleBatchSaveSubjectMarks = async () => {
+    setSaving(true);
     try {
+      const liveAlex = roster.find((s) => s.isLiveDbUser);
+      if (liveAlex) {
+        const alexScore = getStudentSubjectMark(liveAlex, selectedCourseId);
+        await api.post('/marks', {
+          student_id: liveAlex.id,
+          course_id: selectedCourseId,
+          marks: alexScore,
+        });
+      }
+
       setRoster((prev) =>
-        prev.map((student) => {
-          const attRate = student.attendancePercentage ?? (student.attendancePresent ? 88.0 : 58.0);
-          const diag = computeRiskDiagnosis(student.marks, attRate);
+        prev.map((s) => {
+          const mark = getStudentSubjectMark(s, selectedCourseId);
+          const att = getStudentSubjectAttendance(s, selectedCourseId);
+          const diag = computeRiskDiagnosis(mark, att);
+          const grade = getGradeFromScore(mark);
+
+          const updatedSubjMarks = {
+            ...(s.subjectMarks || {}),
+            [selectedCourseId]: {
+              ...(s.subjectMarks?.[selectedCourseId] || {}),
+              marks: mark,
+              attendance: att,
+              grade,
+              riskScore: diag.riskScore,
+              riskStatus: diag.riskStatus,
+              severityLevel: diag.severityLevel,
+              primaryFactors: diag.primaryFactors,
+              recommendations: diag.recommendations,
+            },
+          };
+
+          const overall = evaluateOverallStudentRisk(updatedSubjMarks, s);
+
           return {
-            ...student,
-            riskScore: diag.riskScore,
-            riskStatus: diag.riskStatus,
-            severityLevel: diag.severityLevel,
-            primaryFactors: diag.primaryFactors,
-            recommendations: diag.recommendations,
+            ...s,
+            subjectMarks: updatedSubjMarks,
+            riskScore: overall.riskScore,
+            riskStatus: overall.riskStatus,
+            severityLevel: overall.severityLevel,
+            primaryFactors: overall.primaryFactors,
+            recommendations: overall.recommendations,
             isGlowing: true,
           };
         })
       );
 
-      // Re-fetch database flagged students if any
+      setToastMessage(`✓ Batch Posted: All student internal marks for "${selectedCourse.name}" saved & evaluated!`);
+      setTimeout(() => {
+        setRoster((prev) => prev.map((s) => ({ ...s, isGlowing: false })));
+        setToastMessage(null);
+      }, 4000);
+    } catch (err) {
+      console.error('Batch save error:', err);
+      setToastMessage('Error saving batch marks.');
+      setTimeout(() => setToastMessage(null), 3500);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Re-evaluate entire course roster across all enrolled subjects
+  const handleReevaluateAll = async () => {
+    setEvaluatingAll(true);
+    setToastMessage('🧠 AI Risk Engine: Performing multi-factor risk inference across all subjects...');
+    try {
+      setRoster((prev) =>
+        prev.map((student) => {
+          const updatedSubjMarks = { ...(student.subjectMarks || {}) };
+          courses.forEach((c) => {
+            const mark = getStudentSubjectMark(student, c.id);
+            const att = getStudentSubjectAttendance(student, c.id);
+            const diag = computeRiskDiagnosis(mark, att);
+            updatedSubjMarks[c.id] = {
+              ...(updatedSubjMarks[c.id] || {}),
+              marks: mark,
+              attendance: att,
+              grade: getGradeFromScore(mark),
+              riskScore: diag.riskScore,
+              riskStatus: diag.riskStatus,
+              severityLevel: diag.severityLevel,
+              primaryFactors: diag.primaryFactors,
+              recommendations: diag.recommendations,
+            };
+          });
+
+          const overall = evaluateOverallStudentRisk(updatedSubjMarks, student);
+
+          return {
+            ...student,
+            subjectMarks: updatedSubjMarks,
+            riskScore: overall.riskScore,
+            riskStatus: overall.riskStatus,
+            severityLevel: overall.severityLevel,
+            primaryFactors: overall.primaryFactors,
+            recommendations: overall.recommendations,
+            isGlowing: true,
+          };
+        })
+      );
+
       try {
         const res = await api.get('/marks/high-risk');
         if (res.data?.students) setHighRiskDbStudents(res.data.students);
@@ -676,7 +1004,7 @@ export default function FacultyDashboard() {
 
       setTimeout(() => {
         setRoster((prev) => prev.map((s) => ({ ...s, isGlowing: false })));
-        setToastMessage('✓ AI Academic Risk Analysis complete! Updated risk scores, severity meters, and recommendations.');
+        setToastMessage('✓ AI Academic Risk Analysis complete! Updated subject risk scores and recommendations.');
         setTimeout(() => setToastMessage(null), 4000);
       }, 1200);
     } catch (err) {
@@ -684,6 +1012,54 @@ export default function FacultyDashboard() {
     } finally {
       setEvaluatingAll(false);
     }
+  };
+
+  // Re-evaluate risk specifically for the active subject
+  const handleReevaluateSubjectRisk = (courseId = selectedCourseId) => {
+    const targetCourse = courses.find((c) => c.id === courseId) || selectedCourse;
+    setToastMessage(`🧠 AI Risk Engine: Assessing cohort risk specifically for "${targetCourse.name}"...`);
+
+    setRoster((prev) =>
+      prev.map((s) => {
+        const mark = getStudentSubjectMark(s, courseId);
+        const att = getStudentSubjectAttendance(s, courseId);
+        const diag = computeRiskDiagnosis(mark, att);
+
+        const updatedSubjMarks = {
+          ...(s.subjectMarks || {}),
+          [courseId]: {
+            ...(s.subjectMarks?.[courseId] || {}),
+            marks: mark,
+            attendance: att,
+            grade: getGradeFromScore(mark),
+            riskScore: diag.riskScore,
+            riskStatus: diag.riskStatus,
+            severityLevel: diag.severityLevel,
+            primaryFactors: diag.primaryFactors,
+            recommendations: diag.recommendations,
+          },
+        };
+
+        const overall = evaluateOverallStudentRisk(updatedSubjMarks, s);
+
+        return {
+          ...s,
+          subjectMarks: updatedSubjMarks,
+          riskScore: overall.riskScore,
+          riskStatus: overall.riskStatus,
+          severityLevel: overall.severityLevel,
+          primaryFactors: overall.primaryFactors,
+          recommendations: overall.recommendations,
+          isGlowing: true,
+        };
+      })
+    );
+
+    setTimeout(() => {
+      setRoster((prev) => prev.map((s) => ({ ...s, isGlowing: false })));
+      setToastMessage(`✓ Subject Risk Analysis complete for ${targetCourse.code}: ${targetCourse.name}!`);
+      setTimeout(() => setToastMessage(null), 3500);
+    }, 1000);
   };
 
   // Save Attendance explicitly
@@ -818,10 +1194,16 @@ export default function FacultyDashboard() {
     }
   };
 
-  // High-Risk Cohort Computations & Interactive Filtering
-  const allHighRiskList = roster.filter(
-    (s) => s.riskStatus === 'High Risk' || (Number(s.marks) < 50 && s.marks !== null) || s.riskScore >= 0.70
-  );
+  // High-Risk Cohort Computations & Interactive Filtering (Subject-Wise Aware)
+  const allHighRiskList = roster.filter((s) => {
+    if (highRiskSubjectFilter !== 'ALL') {
+      const mark = getStudentSubjectMark(s, highRiskSubjectFilter);
+      const att = getStudentSubjectAttendance(s, highRiskSubjectFilter);
+      const diag = computeRiskDiagnosis(mark, att);
+      return diag.riskStatus === 'High Risk' || mark < 50 || diag.riskScore >= 0.70;
+    }
+    return s.riskStatus === 'High Risk' || (Number(s.marks) < 50 && s.marks !== null) || s.riskScore >= 0.70;
+  });
 
   const filteredHighRiskStudents = allHighRiskList.filter((s) => {
     if (highRiskSearch.trim()) {
@@ -832,24 +1214,35 @@ export default function FacultyDashboard() {
       if (!matchName && !matchRoll && !matchEmail) return false;
     }
 
-    const att = s.attendancePercentage ?? (s.attendancePresent ? 88 : 58);
+    const targetCourseForFilter = highRiskSubjectFilter !== 'ALL' ? highRiskSubjectFilter : selectedCourseId;
+    const mark = getStudentSubjectMark(s, targetCourseForFilter);
+    const att = getStudentSubjectAttendance(s, targetCourseForFilter);
+    const diag = getStudentSubjectDiagnosis(s, targetCourseForFilter);
+
     if (highRiskFilter === 'CRITICAL') {
-      return s.riskScore >= 0.85 || s.marks < 40;
+      return s.riskScore >= 0.85 || diag.riskScore >= 0.85 || mark < 40;
     }
     if (highRiskFilter === 'ATTENDANCE') {
       return att < 65;
     }
     if (highRiskFilter === 'ACADEMIC') {
-      return s.marks < 50;
+      return mark < 50;
     }
     return true;
   });
 
-  const criticalRiskCount = allHighRiskList.filter((s) => s.riskScore >= 0.85 || s.marks < 40).length;
-  const examDeficitCount = allHighRiskList.filter((s) => s.marks < 50).length;
-  const attendanceDeficitCount = allHighRiskList.filter(
-    (s) => (s.attendancePercentage ?? (s.attendancePresent ? 88 : 58)) < 65
-  ).length;
+  const criticalRiskCount = allHighRiskList.filter((s) => {
+    const mark = getStudentSubjectMark(s, highRiskSubjectFilter !== 'ALL' ? highRiskSubjectFilter : selectedCourseId);
+    return s.riskScore >= 0.85 || mark < 40;
+  }).length;
+  const examDeficitCount = allHighRiskList.filter((s) => {
+    const mark = getStudentSubjectMark(s, highRiskSubjectFilter !== 'ALL' ? highRiskSubjectFilter : selectedCourseId);
+    return mark < 50;
+  }).length;
+  const attendanceDeficitCount = allHighRiskList.filter((s) => {
+    const att = getStudentSubjectAttendance(s, highRiskSubjectFilter !== 'ALL' ? highRiskSubjectFilter : selectedCourseId);
+    return att < 65;
+  }).length;
 
   return (
     <DashboardLayout>
@@ -1162,127 +1555,419 @@ export default function FacultyDashboard() {
           </div>
         )}
 
-        {/* TAB 2: COURSE GRADING & MARKS */}
+        {/* TAB 2: COURSE GRADING & SUBJECT-WISE INTERNAL MARKS ENTRY */}
         {activeTab === 'grading' && (
           <div className="space-y-6 animate-fade-in">
-            <div className="bg-gradient-to-r from-white via-indigo-50/40 to-white border border-indigo-200 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700">
-                  <FileSpreadsheet className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Internal Assessment & Continuous Evaluation • {selectedCourse.name}
-                  </h3>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Posting marks writes to PostgreSQL, invalidates Redis caches, emits WebSocket events, and queues asynchronous RabbitMQ AI risk recalculation.
-                  </p>
-                </div>
+            {/* Subject Selector Pills & View Mode Bar */}
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mr-1">
+                  <BookOpen className="w-4 h-4 text-indigo-600" />
+                  <span>Select Subject:</span>
+                </span>
+                {courses.map((course) => {
+                  const isSelected = course.id === selectedCourseId;
+                  const atRiskForSubj = roster.filter((s) => {
+                    const mark = getStudentSubjectMark(s, course.id);
+                    const diag = getStudentSubjectDiagnosis(s, course.id);
+                    return diag.riskStatus === 'High Risk' || mark < 50;
+                  }).length;
+
+                  return (
+                    <button
+                      key={course.id}
+                      type="button"
+                      onClick={() => setSelectedCourseId(course.id)}
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-200'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      <span className="font-mono">{course.code}</span>
+                      <span className="hidden sm:inline">• {course.name}</span>
+                      {atRiskForSubj > 0 && (
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'
+                          }`}
+                        >
+                          {atRiskForSubj} at risk
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* View Switcher: Single Course vs Full Matrix */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-start lg:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setGradingViewMode('single')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    gradingViewMode === 'single'
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Single Subject</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGradingViewMode('matrix')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    gradingViewMode === 'matrix'
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Table className="w-3.5 h-3.5" />
+                  <span>Subject-Wise Matrix</span>
+                </button>
               </div>
             </div>
 
-            {/* Grading Grid */}
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-semibold tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th scope="col" className="px-6 py-4">Student Name & Roll No</th>
-                      <th scope="col" className="px-6 py-4 text-center">Current Score (/100)</th>
-                      <th scope="col" className="px-6 py-4 text-center">Grade Estimate</th>
-                      <th scope="col" className="px-6 py-4 text-center">ML Risk Standing</th>
-                      <th scope="col" className="px-6 py-4 text-right">Submit & Post Marks</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {roster.map((student) => {
-                      const isAlex = student.isLiveDbUser;
-                      const gradeEstimate =
-                        student.marks >= 90 ? 'O' : student.marks >= 80 ? 'A+' : student.marks >= 70 ? 'A' : student.marks >= 50 ? 'B' : 'F';
+            {/* SINGLE SUBJECT GRADING VIEW */}
+            {gradingViewMode === 'single' && (
+              <div className="space-y-6">
+                {/* Active Subject Banner & Live Metrics */}
+                <div className="bg-gradient-to-r from-white via-indigo-50/40 to-white border border-indigo-200 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-5 shadow-xs">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0">
+                      <FileSpreadsheet className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          {selectedCourse.code}
+                        </span>
+                        <h3 className="text-base font-bold text-slate-900">
+                          {selectedCourse.name} • Internal Marks Entry
+                        </h3>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-1">
+                        Continuous assessment internal mark out of 100. AI risk engine analyzes subject performance and predicts semester outcome.
+                      </p>
+                    </div>
+                  </div>
 
-                      return (
-                        <tr
-                          key={student.id}
-                          className={`transition-colors ${
-                            isAlex ? 'bg-indigo-50/40 hover:bg-indigo-50/70 border-l-4 border-l-indigo-600' : 'hover:bg-slate-50/80'
-                          } ${student.isGlowing ? 'bg-indigo-100/60' : ''}`}
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs ${
-                                  isAlex
-                                    ? 'bg-indigo-600 text-white ring-2 ring-indigo-200'
-                                    : 'bg-slate-100 border border-slate-200 text-slate-700'
-                                }`}
-                              >
-                                {student.name.charAt(0)}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="font-bold text-slate-900 leading-tight">{student.name}</p>
-                                  {isAlex && (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                      LIVE CONNECTED
-                                    </span>
-                                  )}
+                  {/* 3 Subject Quick KPIs & Batch Actions */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-center shadow-xs">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Class Average</span>
+                      <span className="text-sm font-extrabold text-slate-900 font-mono">
+                        {selectedSubjectAvg} <span className="text-[10px] text-slate-400">/ 100</span>
+                      </span>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-center shadow-xs">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Pass Rate</span>
+                      <span className="text-sm font-extrabold text-emerald-600 font-mono">
+                        {selectedSubjectPassRate}%
+                      </span>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-center shadow-xs">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">At-Risk Count</span>
+                      <span className={`text-sm font-extrabold font-mono ${selectedSubjectAtRiskCount > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                        {selectedSubjectAtRiskCount} Students
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleBatchSaveSubjectMarks}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>{saving ? 'Posting...' : `Post All ${selectedCourse.code}`}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleReevaluateSubjectRisk(selectedCourse.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                        title="Re-run AI Risk Model on this Subject"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Assess Risk</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subject-Wise Grading Table */}
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-700">
+                      <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-semibold tracking-wider border-b border-slate-200">
+                        <tr>
+                          <th scope="col" className="px-6 py-4">Student Name & Roll No</th>
+                          <th scope="col" className="px-6 py-4 text-center">Subject Attendance</th>
+                          <th scope="col" className="px-6 py-4 text-center">Internal Score (/100)</th>
+                          <th scope="col" className="px-6 py-4 text-center">Grade Estimate</th>
+                          <th scope="col" className="px-6 py-4 text-center">Subject AI Risk Standing</th>
+                          <th scope="col" className="px-6 py-4 text-right">Submit & Post Marks</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {roster.map((student) => {
+                          const isAlex = student.isLiveDbUser;
+                          const currentScore = getStudentSubjectMark(student, selectedCourse.id);
+                          const subjectAtt = getStudentSubjectAttendance(student, selectedCourse.id);
+                          const gradeEstimate = getGradeFromScore(currentScore);
+                          const subjDiag = getStudentSubjectDiagnosis(student, selectedCourse.id);
+
+                          return (
+                            <tr
+                              key={student.id}
+                              className={`transition-colors ${
+                                isAlex ? 'bg-indigo-50/40 hover:bg-indigo-50/70 border-l-4 border-l-indigo-600' : 'hover:bg-slate-50/80'
+                              } ${student.isGlowing ? 'bg-indigo-100/60' : ''}`}
+                            >
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs ${
+                                      isAlex
+                                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-200'
+                                        : 'bg-slate-100 border border-slate-200 text-slate-700'
+                                    }`}
+                                  >
+                                    {student.name.charAt(0)}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-bold text-slate-900 leading-tight">{student.name}</p>
+                                      {isAlex && (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                          LIVE DB
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-slate-500 font-mono mt-0.5">
+                                      {student.rollNo} • {student.email}
+                                    </p>
+                                  </div>
                                 </div>
-                                <p className="text-xs text-slate-500 font-mono mt-0.5">
-                                  {student.rollNo} • {student.email}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
+                              </td>
 
-                          <td className="px-6 py-4 text-center">
-                            <div className="inline-flex items-center gap-2">
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={student.marks}
-                                onChange={(e) => handleMarkChange(student.id, e.target.value)}
-                                className="w-16 bg-white border border-slate-200 focus:border-indigo-600 rounded-lg px-2 py-1.5 text-center font-mono font-bold text-slate-900 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-xs"
-                              />
-                              <span className="text-xs text-slate-400 font-mono">/ 100</span>
-                            </div>
-                          </td>
+                              <td className="px-6 py-4 text-center">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
+                                    subjectAtt >= 75
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : subjectAtt >= 65
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  }`}
+                                >
+                                  {subjectAtt.toFixed(1)}%
+                                </span>
+                              </td>
 
-                          <td className="px-6 py-4 text-center">
-                            <span
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
-                                gradeEstimate === 'O' || gradeEstimate === 'A+'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : gradeEstimate === 'A' || gradeEstimate === 'B'
-                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              <td className="px-6 py-4 text-center">
+                                <div className="inline-flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={currentScore}
+                                    onChange={(e) => handleSubjectMarkChange(student.id, selectedCourse.id, e.target.value)}
+                                    className="w-16 bg-white border border-slate-300 focus:border-indigo-600 rounded-lg px-2 py-1.5 text-center font-mono font-bold text-slate-900 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                                  />
+                                  <span className="text-xs text-slate-400 font-mono">/ 100</span>
+                                </div>
+                              </td>
+
+                              <td className="px-6 py-4 text-center">
+                                <span
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
+                                    gradeEstimate === 'O' || gradeEstimate === 'A+'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : gradeEstimate === 'A' || gradeEstimate === 'B+' || gradeEstimate === 'B'
+                                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  }`}
+                                >
+                                  Grade {gradeEstimate}
+                                </span>
+                              </td>
+
+                              <td className="px-6 py-4 text-center">
+                                <div className="flex flex-col items-center gap-1">
+                                  {getRiskBadge(subjDiag.riskStatus, student.isGlowing)}
+                                  <span className="text-[10px] font-mono text-slate-400 font-semibold">
+                                    Risk Index: {Math.round(subjDiag.riskScore * 100)}%
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="px-6 py-4 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveSubjectMarksAndAssessRisk(student, selectedCourse.id)}
+                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                                >
+                                  <span>Post Marks</span>
+                                  <ArrowUpRight className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ALL-SUBJECTS MATRIX SPREADSHEET VIEW */}
+            {gradingViewMode === 'matrix' && (
+              <div className="space-y-4">
+                <div className="bg-white border border-slate-200 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Table className="w-4 h-4 text-indigo-600" />
+                      Cross-Subject Marks Entry Matrix
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Enter continuous evaluation marks across all core subjects in one unified spreadsheet. The AI engine recalculates subject and cumulative academic risk in real time.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReevaluateAll}
+                    disabled={evaluatingAll}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${evaluatingAll ? 'animate-spin' : ''}`} />
+                    <span>{evaluatingAll ? 'Analyzing...' : 'Re-Evaluate All Matrix Risk'}</span>
+                  </button>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700">
+                      <thead className="bg-slate-50 uppercase text-[10px] text-slate-500 font-bold border-b border-slate-200">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 min-w-[200px]">Student Details</th>
+                          {courses.map((course) => (
+                            <th key={course.id} scope="col" className="px-4 py-3 text-center min-w-[130px]">
+                              <div>{course.code}</div>
+                              <div className="text-[9px] font-normal text-slate-400 capitalize">{course.name}</div>
+                            </th>
+                          ))}
+                          <th scope="col" className="px-4 py-3 text-center min-w-[140px]">Cumulative AI Risk</th>
+                          <th scope="col" className="px-4 py-3 text-right min-w-[100px]">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {roster.map((student) => {
+                          const isAlex = student.isLiveDbUser;
+
+                          return (
+                            <tr
+                              key={student.id}
+                              className={`transition-colors ${
+                                isAlex ? 'bg-indigo-50/30 hover:bg-indigo-50/60 border-l-4 border-l-indigo-600' : 'hover:bg-slate-50/60'
                               }`}
                             >
-                              Grade {gradeEstimate}
-                            </span>
-                          </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div
+                                    className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
+                                      isAlex ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {student.name.charAt(0)}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="font-bold text-slate-900 leading-tight">{student.name}</p>
+                                      {isAlex && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">
+                                          LIVE
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 font-mono">{student.rollNo}</p>
+                                  </div>
+                                </div>
+                              </td>
 
-                          <td className="px-6 py-4 text-center">
-                            {getRiskBadge(student.riskStatus, student.isGlowing)}
-                          </td>
+                              {courses.map((course) => {
+                                const currentScore = getStudentSubjectMark(student, course.id);
+                                const grade = getGradeFromScore(currentScore);
+                                const diag = getStudentSubjectDiagnosis(student, course.id);
+                                const isFail = currentScore < 50;
 
-                          <td className="px-6 py-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleSaveMarksAndAssessRisk(student)}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all"
-                            >
-                              <span>Post Marks</span>
-                              <ArrowUpRight className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                                return (
+                                  <td key={course.id} className="px-4 py-3 text-center">
+                                    <div className="inline-flex flex-col items-center gap-1">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={currentScore}
+                                        onChange={(e) => handleSubjectMarkChange(student.id, course.id, e.target.value)}
+                                        className={`w-14 text-center font-mono font-bold text-xs py-1 px-1.5 rounded-lg border transition-all ${
+                                          isFail
+                                            ? 'bg-rose-50 border-rose-300 text-rose-700 font-black'
+                                            : 'bg-white border-slate-200 text-slate-900'
+                                        }`}
+                                      />
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-[9px] font-mono font-semibold px-1 py-0.2 rounded bg-slate-100 text-slate-600">
+                                          {grade}
+                                        </span>
+                                        <span
+                                          className={`w-1.5 h-1.5 rounded-full ${
+                                            diag.riskStatus === 'High Risk'
+                                              ? 'bg-rose-500'
+                                              : diag.riskStatus === 'Medium Risk'
+                                              ? 'bg-amber-500'
+                                              : 'bg-emerald-500'
+                                          }`}
+                                          title={`Risk: ${Math.round(diag.riskScore * 100)}%`}
+                                        />
+                                      </div>
+                                    </div>
+                                  </td>
+                                );
+                              })}
+
+                              <td className="px-4 py-3 text-center">
+                                <div className="inline-flex flex-col items-center gap-0.5">
+                                  {getRiskBadge(student.riskStatus, student.isGlowing)}
+                                  <span className="text-[10px] font-mono text-slate-400">
+                                    {Math.round(student.riskScore * 100)}% Index
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveSubjectMarksAndAssessRisk(student, selectedCourseId)}
+                                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                >
+                                  Save
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1394,51 +2079,107 @@ export default function FacultyDashboard() {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1">
-                  <Filter className="w-3.5 h-3.5" />
-                  <span>Filter Cohort:</span>
-                </span>
-                <button
-                  onClick={() => setHighRiskFilter('ALL')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    highRiskFilter === 'ALL'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  All High-Risk ({allHighRiskList.length})
-                </button>
-                <button
-                  onClick={() => setHighRiskFilter('CRITICAL')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    highRiskFilter === 'CRITICAL'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Critical Severity ({criticalRiskCount})
-                </button>
-                <button
-                  onClick={() => setHighRiskFilter('ACADEMIC')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    highRiskFilter === 'ACADEMIC'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Exam Deficit &lt; 50 ({examDeficitCount})
-                </button>
-                <button
-                  onClick={() => setHighRiskFilter('ATTENDANCE')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    highRiskFilter === 'ATTENDANCE'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Debarment Attendance &lt; 65% ({attendanceDeficitCount})
-                </button>
+              <div className="flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1">
+                    <Filter className="w-3.5 h-3.5" />
+                    <span>Filter Cohort:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHighRiskFilter('ALL')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      highRiskFilter === 'ALL'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    All High-Risk ({allHighRiskList.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHighRiskFilter('CRITICAL')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      highRiskFilter === 'CRITICAL'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Critical Severity ({criticalRiskCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHighRiskFilter('ACADEMIC')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      highRiskFilter === 'ACADEMIC'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Exam Deficit &lt; 50 ({examDeficitCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHighRiskFilter('ATTENDANCE')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      highRiskFilter === 'ATTENDANCE'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Debarment Attendance &lt; 65% ({attendanceDeficitCount})
+                  </button>
+                </div>
+
+                {/* Subject-Wise Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1 mr-1">
+                    <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Subject Filter:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHighRiskSubjectFilter('ALL')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      highRiskSubjectFilter === 'ALL'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    All Subjects
+                  </button>
+                  {courses.map((course) => {
+                    const isSelected = highRiskSubjectFilter === course.id;
+                    const count = roster.filter((s) => {
+                      const m = getStudentSubjectMark(s, course.id);
+                      const diag = getStudentSubjectDiagnosis(s, course.id);
+                      return diag.riskStatus === 'High Risk' || m < 50;
+                    }).length;
+
+                    return (
+                      <button
+                        key={course.id}
+                        type="button"
+                        onClick={() => setHighRiskSubjectFilter(course.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                        }`}
+                      >
+                        <span>{course.code}</span>
+                        <span className="hidden sm:inline">{course.name}</span>
+                        <span
+                          className={`px-1 py-0.2 rounded-full text-[9px] font-black ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -1525,32 +2266,107 @@ export default function FacultyDashboard() {
                         </div>
 
                         {/* Performance Diagnostic Scoreboard (Clean White Themed) */}
-                        <div className="grid grid-cols-2 gap-3 mt-4">
-                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                              Continuous Internal Marks
-                            </span>
-                            <div className="flex items-baseline gap-1 mt-1">
-                              <span className="text-2xl font-black text-slate-900 font-mono">{student.marks}</span>
-                              <span className="text-xs text-slate-500 font-semibold">/ 100</span>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-700 mt-0.5 block">
-                              {student.marks < 40 ? '⚠️ Critical Deficit (<40)' : '⚠️ Below Passing (50)'}
-                            </span>
-                          </div>
+                        {(() => {
+                          const activeSubjId = highRiskSubjectFilter !== 'ALL' ? highRiskSubjectFilter : selectedCourseId;
+                          const activeSubj = courses.find((c) => c.id === activeSubjId) || selectedCourse;
+                          const activeMark = getStudentSubjectMark(student, activeSubjId);
+                          const activeAtt = getStudentSubjectAttendance(student, activeSubjId);
 
-                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                              Live Course Attendance
-                            </span>
-                            <div className="flex items-baseline gap-1 mt-1">
-                              <span className="text-2xl font-black text-slate-900 font-mono">{attRate.toFixed(1)}%</span>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-700 mt-0.5 block">
-                              {attRate < 65 ? '⚠️ Debarment Alert (<65%)' : '⚠️ Below Statutory 75%'}
-                            </span>
-                          </div>
-                        </div>
+                          return (
+                            <>
+                              <div className="grid grid-cols-2 gap-3 mt-4">
+                                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                      {activeSubj.code} Internal Score
+                                    </span>
+                                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-white text-slate-600 border border-slate-200">
+                                      Grade {getGradeFromScore(activeMark)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1 mt-1">
+                                    <span className="text-2xl font-black text-slate-900 font-mono">{activeMark}</span>
+                                    <span className="text-xs text-slate-500 font-semibold">/ 100</span>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-slate-700 mt-0.5 block">
+                                    {activeMark < 40 ? '⚠️ Critical Failure Deficit (<40)' : activeMark < 50 ? '⚠️ Below Passing (<50)' : '✓ Passing Standing'}
+                                  </span>
+                                </div>
+
+                                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                      {activeSubj.code} Attendance
+                                    </span>
+                                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-white text-slate-600 border border-slate-200">
+                                      {activeAtt >= 75 ? 'Safe' : 'Debarment'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1 mt-1">
+                                    <span className="text-2xl font-black text-slate-900 font-mono">{activeAtt.toFixed(1)}%</span>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-slate-700 mt-0.5 block">
+                                    {activeAtt < 65 ? '⚠️ Statutory Debarment (<65%)' : activeAtt < 75 ? '⚠️ Below Statutory 75%' : '✓ Satisfactory'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Subject-Wise Academic Breakdown Grid */}
+                              <div className="mt-4 pt-3 border-t border-slate-100">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                    <Layers className="w-3.5 h-3.5 text-slate-600" />
+                                    <span>Subject-Wise Marks & Risk Inference</span>
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-slate-400">4 Enrolled Subjects</span>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  {courses.map((course) => {
+                                    const mark = getStudentSubjectMark(student, course.id);
+                                    const grade = getGradeFromScore(mark);
+                                    const diag = getStudentSubjectDiagnosis(student, course.id);
+                                    const isDeficit = mark < 50 || diag.riskStatus === 'High Risk';
+
+                                    return (
+                                      <div
+                                        key={course.id}
+                                        className={`p-2.5 rounded-xl border text-center transition-all ${
+                                          isDeficit
+                                            ? 'bg-rose-50/70 border-rose-200 text-rose-950 ring-1 ring-rose-200 shadow-2xs'
+                                            : 'bg-slate-50 border-slate-200 text-slate-800'
+                                        }`}
+                                      >
+                                        <p className="text-[10px] font-bold font-mono text-slate-500 truncate" title={course.name}>
+                                          {course.code}
+                                        </p>
+                                        <p className="text-base font-black mt-0.5 font-mono">
+                                          {mark} <span className="text-[10px] font-normal text-slate-400">/100</span>
+                                        </p>
+                                        <div className="mt-1 flex items-center justify-center gap-1">
+                                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white/90 border border-slate-200">
+                                            {grade}
+                                          </span>
+                                          <span
+                                            className={`text-[9px] font-extrabold px-1 py-0.2 rounded ${
+                                              diag.riskStatus === 'High Risk'
+                                                ? 'bg-rose-100 text-rose-800'
+                                                : diag.riskStatus === 'Medium Risk'
+                                                ? 'bg-amber-100 text-amber-800'
+                                                : 'bg-emerald-100 text-emerald-800'
+                                            }`}
+                                          >
+                                            {Math.round(diag.riskScore * 100)}%
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
 
                         {/* AI Diagnostic Factors */}
                         <div className="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
@@ -1605,13 +2421,16 @@ export default function FacultyDashboard() {
 
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={() => {
+                              const activeSubjId = highRiskSubjectFilter !== 'ALL' ? highRiskSubjectFilter : selectedCourseId;
+                              const activeSubj = courses.find((c) => c.id === activeSubjId) || selectedCourse;
+                              const mark = getStudentSubjectMark(student, activeSubjId);
                               handleOpenMessageModal(
                                 student,
-                                `Remedial Tutorial Invitation: ${selectedCourse.name}`,
-                                `Dear ${student.name},\n\nYou are scheduled for a mandatory 1-on-1 Remedial Tutorial this Thursday at 3:30 PM in Room CS-402 with Dr. Ramanujan.\n\nPlease bring your recent coursework notebooks to review problem solutions.\n\nBest regards,\nFaculty Academic Advisory`
-                              )
-                            }
+                                `Remedial Tutorial Invitation: ${activeSubj.code} ${activeSubj.name}`,
+                                `Dear ${student.name},\n\nYour internal continuous evaluation score in "${activeSubj.name}" (${mark}/100) has flagged an elevated academic risk.\n\nYou are scheduled for a mandatory 1-on-1 Remedial Tutorial this Thursday at 3:30 PM in Room CS-402 with Dr. Ramanujan.\n\nPlease bring your recent coursework notebooks to review subject problem solutions.\n\nBest regards,\nFaculty Academic Advisory`
+                              );
+                            }}
                             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 transition-all cursor-pointer shadow-2xs"
                           >
                             <Calendar className="w-3.5 h-3.5 text-slate-600" />
@@ -1772,7 +2591,8 @@ export default function FacultyDashboard() {
                           </td>
 
                           <td className="px-6 py-4 text-center font-mono font-bold text-slate-900">
-                            {student.marks}
+                            <div>{getStudentSubjectMark(student, selectedCourse.id)}</div>
+                            <span className="text-[10px] font-normal text-slate-400 font-sans">{selectedCourse.code}</span>
                           </td>
 
                           <td className="px-6 py-4 text-center">
