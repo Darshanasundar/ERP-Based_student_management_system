@@ -1337,29 +1337,6 @@ export default function FacultyDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Real-time WebSockets & Architecture Status Ribbon */}
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white border border-slate-200 text-xs shadow-xs">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-              <span className="font-bold text-slate-800">
-                WebSockets: {isConnected ? 'LIVE CONNECTED' : 'CONNECTING...'}
-              </span>
-            </div>
-            <div className="hidden sm:flex items-center gap-1.5 text-slate-500">
-              <Database className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Redis Cache Write-Through: Active</span>
-            </div>
-            <div className="hidden sm:flex items-center gap-1.5 text-slate-500">
-              <Activity className="w-3.5 h-3.5 text-amber-600" />
-              <span>RabbitMQ ML Risk Queue: Ready</span>
-            </div>
-          </div>
-          <span className="text-[11px] font-mono text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200 font-semibold">
-            Real-Time Push to Student Portal Active
-          </span>
-        </div>
-
         {/* Top Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>

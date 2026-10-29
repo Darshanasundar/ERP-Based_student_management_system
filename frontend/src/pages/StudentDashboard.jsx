@@ -257,10 +257,13 @@ export default function StudentDashboard() {
       sgpa: 9.15,
       credits: 22,
       courses: [
-        { id: '27d6a359-8570-4e13-b2a8-73e03546e31e', code: 'CS301', title: 'Data Structures & Algorithms', credits: 4, internal: 45, maxMarks: 100, external: '-', total: 45, grade: 'Grade F' },
-        { id: '5bb138c2-848b-4ca3-9719-d8b8b07a719c', code: 'CS302', title: 'Introduction to Databases', credits: 3, internal: 85, maxMarks: 100, external: '-', total: 85, grade: 'Grade A+' },
-        { id: '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f', code: 'CS303', title: 'Operating Systems', credits: 4, internal: 78, maxMarks: 100, external: '-', total: 78, grade: 'Grade A' },
-        { id: '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a', code: 'CS304', title: 'Computer Networks', credits: 3, internal: 82, maxMarks: 100, external: '-', total: 82, grade: 'Grade A+' },
+        { code: '23CS601', title: 'Data Structures & Algorithms', credits: 4, internal: 38, external: '-', total: '92', grade: 'Expected O' },
+        { code: '23CS602', title: 'Introduction to Databases', credits: 3, internal: 37, external: '-', total: '88', grade: 'Expected A+' },
+        { code: '23CS603', title: 'Data Analytics & Big Data Tools', credits: 3, internal: 39, external: '-', total: '95', grade: 'Expected O' },
+        { code: '23CS604', title: 'Professional Elective II: NLP & LLMs', credits: 3, internal: 38, external: '-', total: '94', grade: 'Expected O' },
+        { code: '23CS605', title: 'Open Elective I: Fintech & Blockchain', credits: 3, internal: 36, external: '-', total: '86', grade: 'Expected A+' },
+        { code: '23CS606', title: 'AI & Data Science Laboratory', credits: 2, internal: 39, external: '-', total: '98', grade: 'Expected O' },
+        { code: '23CS607', title: 'Mini Project & Product Design', credits: 3, internal: 39, external: '-', total: '96', grade: 'Expected O' },
       ],
     },
     {
@@ -291,6 +294,15 @@ export default function StudentDashboard() {
       ],
     },
   ]);
+
+  // Separate Continuous Assessments & Internal Marks (Entered directly from Faculty Portal)
+  const [assessmentMarks, setAssessmentMarks] = useState([
+    { id: '27d6a359-8570-4e13-b2a8-73e03546e31e', code: 'CS301', title: 'Data Structures & Algorithms', credits: 4, internal: 45, maxMarks: 100, grade: 'Grade F', status: 'At Risk', riskScore: 0.72 },
+    { id: '5bb138c2-848b-4ca3-9719-d8b8b07a719c', code: 'CS302', title: 'Introduction to Databases', credits: 3, internal: 85, maxMarks: 100, grade: 'Grade A+', status: 'Passed', riskScore: 0.12 },
+    { id: '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f', code: 'CS303', title: 'Operating Systems', credits: 4, internal: 78, maxMarks: 100, grade: 'Grade A', status: 'Passed', riskScore: 0.18 },
+    { id: '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a', code: 'CS304', title: 'Computer Networks', credits: 3, internal: 82, maxMarks: 100, grade: 'Grade A+', status: 'Passed', riskScore: 0.15 },
+  ]);
+  const [loadingMarks, setLoadingMarks] = useState(false);
 
   const [expandedSem, setExpandedSem] = useState(6);
 
@@ -388,6 +400,7 @@ export default function StudentDashboard() {
 
   // Initial load
   const fetchStudentMarks = useCallback(() => {
+    setLoadingMarks(true);
     api.get(`/marks/student/${ALEX_STUDENT_ID}`)
       .then((res) => {
         if (res.data?.marks && res.data.marks.length > 0) {
@@ -401,39 +414,35 @@ export default function StudentDashboard() {
             score: highestRisk.riskScore || 0.12,
           });
 
-          setSemestersData((prev) =>
-            prev.map((sem) => {
-              if (sem.semNumber === 6) {
-                const updatedCourses = sem.courses.map((c) => {
-                  const match = marksList.find(
-                    (m) =>
-                      (m.courseId && m.courseId === c.id) ||
-                      (m.courseName && c.title.toLowerCase().includes(m.courseName.toLowerCase())) ||
-                      (m.courseName && m.courseName.toLowerCase().includes(c.title.toLowerCase())) ||
-                      (c.code === 'CS301' && (m.courseName || '').toLowerCase().includes('data structures')) ||
-                      (c.code === 'CS302' && (m.courseName || '').toLowerCase().includes('database')) ||
-                      (c.code === 'CS303' && (m.courseName || '').toLowerCase().includes('operating systems')) ||
-                      (c.code === 'CS304' && (m.courseName || '').toLowerCase().includes('computer networks'))
-                  );
-                  if (match) {
-                    const sc = parseFloat(match.internalScore !== undefined ? match.internalScore : match.marks || 0);
-                    return {
-                      ...c,
-                      internal: sc,
-                      total: sc,
-                      grade: match.grade || (sc >= 90 ? 'Grade O' : sc >= 80 ? 'Grade A+' : sc >= 70 ? 'Grade A' : sc >= 60 ? 'Grade B+' : sc >= 50 ? 'Grade B' : 'Grade F'),
-                    };
-                  }
-                  return c;
-                });
-                return { ...sem, courses: updatedCourses };
+          setAssessmentMarks((prev) =>
+            prev.map((c) => {
+              const match = marksList.find(
+                (m) =>
+                  (m.courseId && m.courseId === c.id) ||
+                  (m.courseName && c.title.toLowerCase().includes(m.courseName.toLowerCase())) ||
+                  (m.courseName && m.courseName.toLowerCase().includes(c.title.toLowerCase())) ||
+                  (c.code === 'CS301' && (m.courseName || '').toLowerCase().includes('data structures')) ||
+                  (c.code === 'CS302' && (m.courseName || '').toLowerCase().includes('database')) ||
+                  (c.code === 'CS303' && (m.courseName || '').toLowerCase().includes('operating systems')) ||
+                  (c.code === 'CS304' && (m.courseName || '').toLowerCase().includes('computer networks'))
+              );
+              if (match) {
+                const sc = parseFloat(match.internalScore !== undefined ? match.internalScore : match.marks || 0);
+                return {
+                  ...c,
+                  internal: sc,
+                  grade: match.grade || (sc >= 90 ? 'Grade O' : sc >= 80 ? 'Grade A+' : sc >= 70 ? 'Grade A' : sc >= 60 ? 'Grade B+' : sc >= 50 ? 'Grade B' : 'Grade F'),
+                  status: sc >= 50 ? 'Passed' : 'At Risk',
+                  riskScore: match.riskScore || (sc < 50 ? 0.72 : 0.15),
+                };
               }
-              return sem;
+              return c;
             })
           );
         }
       })
-      .catch((e) => console.warn('Marks fetch:', e));
+      .catch((e) => console.warn('Marks fetch:', e))
+      .finally(() => setLoadingMarks(false));
   }, []);
 
   useEffect(() => {
@@ -513,47 +522,26 @@ export default function StudentDashboard() {
       if (data.student_id === ALEX_STUDENT_ID || data.studentId === ALEX_STUDENT_ID) {
         const newScore = parseFloat(data.internal_score !== undefined ? data.internal_score : data.marks || 0);
 
-        setSemestersData((prev) =>
-          prev.map((sem) => {
-            if (sem.semNumber === 6) {
-              const updatedCourses = sem.courses.map((c) => {
-                const isMatch =
-                  (data.course_id && c.id && data.course_id === c.id) ||
-                  (data.courseName && c.title.toLowerCase().includes(data.courseName.toLowerCase())) ||
-                  (data.courseName && data.courseName.toLowerCase().includes(c.title.toLowerCase())) ||
-                  (c.code === 'CS301' && (data.courseName || '').toLowerCase().includes('data structures')) ||
-                  (c.code === 'CS302' && (data.courseName || '').toLowerCase().includes('database')) ||
-                  (c.code === 'CS303' && (data.courseName || '').toLowerCase().includes('operating systems')) ||
-                  (c.code === 'CS304' && (data.courseName || '').toLowerCase().includes('computer networks'));
-                if (isMatch) {
-                  return {
-                    ...c,
-                    internal: newScore,
-                    total: newScore,
-                    grade: data.grade || (newScore >= 90 ? 'Grade O' : newScore >= 80 ? 'Grade A+' : newScore >= 70 ? 'Grade A' : newScore >= 60 ? 'Grade B+' : newScore >= 50 ? 'Grade B' : 'Grade F'),
-                  };
-                }
-                return c;
-              });
-
-              const newSgpa = Math.min(10.0, Math.max(6.0, parseFloat((7.0 + (newScore / 100) * 2.3).toFixed(2))));
+        setAssessmentMarks((prev) =>
+          prev.map((c) => {
+            const isMatch =
+              (data.course_id && c.id && data.course_id === c.id) ||
+              (data.courseName && c.title.toLowerCase().includes(data.courseName.toLowerCase())) ||
+              (data.courseName && data.courseName.toLowerCase().includes(c.title.toLowerCase())) ||
+              (c.code === 'CS301' && (data.courseName || '').toLowerCase().includes('data structures')) ||
+              (c.code === 'CS302' && (data.courseName || '').toLowerCase().includes('database')) ||
+              (c.code === 'CS303' && (data.courseName || '').toLowerCase().includes('operating systems')) ||
+              (c.code === 'CS304' && (data.courseName || '').toLowerCase().includes('computer networks'));
+            if (isMatch) {
               return {
-                ...sem,
-                sgpa: newSgpa,
-                courses: updatedCourses,
+                ...c,
+                internal: newScore,
+                grade: data.grade || (newScore >= 90 ? 'Grade O' : newScore >= 80 ? 'Grade A+' : newScore >= 70 ? 'Grade A' : newScore >= 60 ? 'Grade B+' : newScore >= 50 ? 'Grade B' : 'Grade F'),
+                status: newScore >= 50 ? 'Passed' : 'At Risk',
+                riskScore: newScore < 50 ? 0.72 : 0.15,
               };
             }
-            return sem;
-          })
-        );
-
-        setSgpaTrendData((prev) =>
-          prev.map((item) => {
-            if (item.semester === 'Sem 6') {
-              const recalculated = Math.min(10.0, Math.max(6.0, parseFloat((7.0 + (newScore / 100) * 2.3).toFixed(2))));
-              return { ...item, sgpa: recalculated };
-            }
-            return item;
+            return c;
           })
         );
 
@@ -561,8 +549,8 @@ export default function StudentDashboard() {
 
         setLiveEventBanner({
           type: 'MARKS',
-          title: 'Live Marks & Percentage Updated by Faculty!',
-          message: `Your score for "${data.courseName || 'Curriculum Subject'}" has been updated to ${newScore}/100. Semester total percentage recomputed in real time.`,
+          title: 'Assessment Marks Updated by Faculty!',
+          message: `Your continuous assessment score for "${data.courseName || 'Curriculum Subject'}" has been updated to ${newScore}/100.`,
         });
 
         setTimeout(() => setLiveEventBanner(null), 6000);
@@ -734,51 +722,30 @@ export default function StudentDashboard() {
     .filter((inv) => inv.status !== 'PAID')
     .reduce((acc, inv) => acc + parseFloat(inv.remainingBalance !== undefined ? inv.remainingBalance : inv.amount), 0);
 
-  // Semester 6 Live Marks & Total Percentage Calculations
-  const sem6 = semestersData.find((s) => s.semNumber === 6);
-  const sem6Courses = sem6?.courses || [];
-  const sem6TotalScored = sem6Courses.reduce(
-    (acc, c) => acc + (parseFloat(c.internal !== undefined ? c.internal : c.total) || 0),
+  // Continuous Assessment Marks & Total Percentage Calculations (Dedicated Assessment Page)
+  const assessmentTotalScored = assessmentMarks.reduce(
+    (acc, c) => acc + (parseFloat(c.internal) || 0),
     0
   );
-  const sem6MaxMarks = sem6Courses.length * 100 || 400;
-  const sem6TotalPercentage =
-    sem6MaxMarks > 0 ? ((sem6TotalScored / sem6MaxMarks) * 100).toFixed(1) : '0.0';
-  const sem6TotalCredits = sem6Courses.reduce((acc, c) => acc + (parseInt(c.credits) || 0), 0) || 14;
-  const sem6HasDeficit = sem6Courses.some(
-    (c) => (parseFloat(c.internal !== undefined ? c.internal : c.total) || 0) < 50
+  const assessmentMaxMarks = assessmentMarks.length * 100 || 400;
+  const assessmentTotalPercentage =
+    assessmentMaxMarks > 0 ? ((assessmentTotalScored / assessmentMaxMarks) * 100).toFixed(1) : '0.0';
+  const assessmentTotalCredits = assessmentMarks.reduce((acc, c) => acc + (parseInt(c.credits) || 0), 0) || 14;
+  const assessmentHasDeficit = assessmentMarks.some(
+    (c) => (parseFloat(c.internal) || 0) < 50
   );
-  const sem6DistinctionStatus =
-    parseFloat(sem6TotalPercentage) >= 75
+  const assessmentDistinctionStatus =
+    parseFloat(assessmentTotalPercentage) >= 75
       ? 'Distinction'
-      : parseFloat(sem6TotalPercentage) >= 60
+      : parseFloat(assessmentTotalPercentage) >= 60
       ? 'First Class'
-      : parseFloat(sem6TotalPercentage) >= 50
+      : parseFloat(assessmentTotalPercentage) >= 50
       ? 'Second Class'
       : 'Academic Warning';
 
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Real-time WebSocket Status Ribbon */}
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white border border-slate-200 text-xs shadow-xs">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-              <span className="font-bold text-slate-800">
-                WebSockets: {isConnected ? 'LIVE CONNECTED' : 'CONNECTING...'}
-              </span>
-            </div>
-            <div className="hidden sm:flex items-center gap-1.5 text-slate-500">
-              <Database className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Redis Cache Layer: Write-Through Active</span>
-            </div>
-          </div>
-          <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
-            <Activity className="w-3 h-3 text-emerald-600" />
-            Live Sync with Faculty Updates
-          </span>
-        </div>
 
         {/* Real-time Alert Banner when any WebSocket event arrives */}
         {liveEventBanner && (
@@ -852,10 +819,6 @@ export default function StudentDashboard() {
                   >
                     AI Status: {aiRiskData.status} ({aiRiskData.score})
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5 shadow-xs">
-                    <Sparkles className="w-3 h-3 text-indigo-600" />
-                    <span>Sem 6 Marks: <strong className="font-extrabold">{sem6TotalScored}/{sem6MaxMarks}</strong> ({sem6TotalPercentage}%)</span>
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-6 gap-y-1 mt-2 text-xs text-slate-600 font-medium">
@@ -923,6 +886,18 @@ export default function StudentDashboard() {
           </button>
 
           <button
+            onClick={() => handleTabChange('assessments')}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'assessments'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>4. Course Assessments & Internal Marks</span>
+          </button>
+
+          <button
             onClick={() => handleTabChange('fees')}
             className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'fees'
@@ -931,7 +906,7 @@ export default function StudentDashboard() {
             }`}
           >
             <CreditCard className="w-4 h-4" />
-            <span>4. Financials & Fee Payments</span>
+            <span>5. Financials & Fee Payments</span>
             {totalOutstandingDues > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-black">
                 Due
@@ -948,7 +923,7 @@ export default function StudentDashboard() {
             }`}
           >
             <Clock className="w-4 h-4" />
-            <span>5. Class Timetable</span>
+            <span>6. Class Timetable</span>
           </button>
 
           <button
@@ -960,7 +935,7 @@ export default function StudentDashboard() {
             }`}
           >
             <UserCheck className="w-4 h-4" />
-            <span>6. Profile & Document Vault</span>
+            <span>7. Profile & Document Vault</span>
           </button>
 
           <button
@@ -972,7 +947,7 @@ export default function StudentDashboard() {
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            <span>7. AI Risk & Faculty Alerts</span>
+            <span>8. AI Risk & Faculty Alerts</span>
             {unreadCount > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-900 text-[10px] font-black">
                 {unreadCount}
@@ -984,8 +959,8 @@ export default function StudentDashboard() {
         {/* TAB 1: ACADEMIC OVERVIEW & CGPA */}
         {activeTab === 'overview' && (
           <div className="space-y-8 animate-fade-in">
-            {/* Quick Stats Row: 4 Essential Academic & Financial KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Quick Stats Row: 3 Core Academic & Financial Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Overall CGPA */}
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
@@ -1006,49 +981,7 @@ export default function StudentDashboard() {
                   <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
                     First Class with Distinction
                   </span>
-                  <span className="text-xs text-slate-500">Live Recalculated</span>
-                </div>
-              </div>
-
-              {/* Semester 6 Total Marks & Percentage KPI Card */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
-                      Sem 6 Total Marks & %
-                    </p>
-                    <div className="flex items-baseline gap-2 mt-2">
-                      <h3 className="text-3xl font-black text-indigo-900">{sem6TotalPercentage}%</h3>
-                      <span className="text-xs font-bold text-slate-500 font-mono">
-                        ({sem6TotalScored}/{sem6MaxMarks})
-                      </span>
-                    </div>
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                    <Sparkles className="w-6 h-6" />
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        parseFloat(sem6TotalPercentage) >= 75
-                          ? 'bg-emerald-500'
-                          : parseFloat(sem6TotalPercentage) >= 60
-                          ? 'bg-indigo-600'
-                          : parseFloat(sem6TotalPercentage) >= 50
-                          ? 'bg-amber-500'
-                          : 'bg-rose-500'
-                      }`}
-                      style={{ width: `${Math.min(100, Math.max(0, parseFloat(sem6TotalPercentage)))}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-2 flex items-center justify-between font-medium">
-                    <span>4 Core Subjects</span>
-                    <span className={`font-bold ${sem6HasDeficit ? 'text-rose-600' : 'text-emerald-700'}`}>
-                      {sem6HasDeficit ? 'Deficit Subject' : sem6DistinctionStatus}
-                    </span>
-                  </p>
+                  <span className="text-xs text-slate-500">Official CGPA</span>
                 </div>
               </div>
 
@@ -1113,159 +1046,6 @@ export default function StudentDashboard() {
                     View Invoices & Pay →
                   </button>
                 </div>
-              </div>
-            </div>
-
-            {/* Semester 6 Detailed Marks Breakdown & Continuous Assessment Table */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                      <Award className="w-5 h-5 text-indigo-600" />
-                      Semester 6 Continuous Assessment Marks & Total Percentage
-                    </h2>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Subject-wise internal assessment marks recorded by faculty members with real-time aggregate percentage calculation.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Percentage</span>
-                    <span className="text-lg font-black text-indigo-700 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-200 inline-block font-mono">
-                      {sem6TotalPercentage}%
-                    </span>
-                  </div>
-                  <div className="text-right pl-3 border-l border-slate-200">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Scored</span>
-                    <span className="text-lg font-extrabold text-slate-900 inline-block font-mono">
-                      {sem6TotalScored} <span className="text-xs font-normal text-slate-400">/ {sem6MaxMarks}</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-50 uppercase text-[10px] text-slate-500 font-bold border-b border-slate-200">
-                    <tr>
-                      <th scope="col" className="px-4 py-3">Course Code</th>
-                      <th scope="col" className="px-4 py-3">Course Title</th>
-                      <th scope="col" className="px-4 py-3 text-center">Credits</th>
-                      <th scope="col" className="px-4 py-3 text-center">Internal Score (/100)</th>
-                      <th scope="col" className="px-4 py-3">Score Progress</th>
-                      <th scope="col" className="px-4 py-3 text-center">Grade</th>
-                      <th scope="col" className="px-4 py-3 text-right">Academic Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
-                    {sem6Courses.map((course, idx) => {
-                      const score = parseFloat(course.internal !== undefined ? course.internal : course.total) || 0;
-                      const isAtRisk = score < 50;
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="px-4 py-3.5 font-mono font-bold text-slate-900">{course.code}</td>
-                          <td className="px-4 py-3.5 font-medium text-slate-900">{course.title}</td>
-                          <td className="px-4 py-3.5 text-center font-mono">{course.credits}</td>
-                          <td className="px-4 py-3.5 text-center">
-                            <span
-                              className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-sm ${
-                                isAtRisk
-                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                  : score >= 80
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                              }`}
-                            >
-                              {score} / 100
-                            </span>
-                          </td>
-                          <td className="px-4 py-3.5 w-44">
-                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${
-                                  isAtRisk
-                                    ? 'bg-rose-500'
-                                    : score >= 80
-                                    ? 'bg-emerald-500'
-                                    : 'bg-indigo-600'
-                                }`}
-                                style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">{score}% Scored</span>
-                          </td>
-                          <td className="px-4 py-3.5 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
-                                score >= 90
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : score >= 70
-                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                  : score >= 50
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
-                              }`}
-                            >
-                              {course.grade}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3.5 text-right">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1 ${
-                                isAtRisk
-                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              }`}
-                            >
-                              {isAtRisk ? (
-                                <>
-                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
-                                  At Risk (&lt;50)
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  Passed
-                                </>
-                              )}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="bg-indigo-50/60 border-t-2 border-indigo-200 font-bold">
-                    <tr>
-                      <td colSpan={2} className="px-4 py-3 text-indigo-900 uppercase font-black tracking-wider text-[11px] flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-indigo-600" />
-                        Aggregate Continuous Assessment Total
-                      </td>
-                      <td className="px-4 py-3 text-center font-mono text-indigo-900">{sem6TotalCredits}</td>
-                      <td className="px-4 py-3 text-center font-mono font-black text-indigo-900 text-sm">
-                        {sem6TotalScored} / {sem6MaxMarks}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                          <div
-                            className="bg-indigo-600 h-full rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, Math.max(0, parseFloat(sem6TotalPercentage)))}%` }}
-                          ></div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center font-mono font-black text-indigo-900 text-sm">
-                        {sem6TotalPercentage}%
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="px-2.5 py-1 rounded bg-indigo-600 text-white text-[11px] font-black shadow-xs">
-                          {sem6DistinctionStatus}
-                        </span>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
               </div>
             </div>
 
@@ -1556,7 +1336,268 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {/* TAB 4: DETAILED FINANCIALS & FEE PAYMENTS */}
+        {/* TAB 4: DEDICATED SEPARATE PAGE FOR COURSE ASSESSMENTS & INTERNAL MARKS */}
+        {activeTab === 'assessments' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Page Header Card */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-wider">
+                    Continuous Evaluation
+                  </span>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Faculty Synchronized
+                  </span>
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 mt-2">
+                  Course Assessments & Internal Marks
+                </h2>
+                <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                  Continuous internal marks and subject assessments entered directly by faculty members via the Faculty Portal.
+                  These records evaluate ongoing coursework, tests, assignments, and laboratory components.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchStudentMarks}
+                  disabled={loadingMarks}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50"
+                >
+                  <Activity className={`w-3.5 h-3.5 ${loadingMarks ? 'animate-spin text-indigo-600' : ''}`} />
+                  <span>{loadingMarks ? 'Refreshing...' : 'Refresh Marks'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Assessment KPI Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Percentage</span>
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-800">{assessmentTotalPercentage}%</span>
+                  <span className="text-xs font-semibold text-slate-400">Aggregate</span>
+                </div>
+                <div className="mt-3 w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      parseFloat(assessmentTotalPercentage) >= 75
+                        ? 'bg-emerald-500'
+                        : parseFloat(assessmentTotalPercentage) >= 60
+                        ? 'bg-indigo-500'
+                        : parseFloat(assessmentTotalPercentage) >= 50
+                        ? 'bg-amber-500'
+                        : 'bg-rose-500'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(0, parseFloat(assessmentTotalPercentage)))}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2">Weighted continuous internal percentage</p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Marks Scored</span>
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                    <Award className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-800">{assessmentTotalScored}</span>
+                  <span className="text-xs font-semibold text-slate-400">/ {assessmentMaxMarks}</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-4">
+                  Evaluated across {assessmentMarks.length} active coursework subjects
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Academic Standing</span>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-black ${
+                    parseFloat(assessmentTotalPercentage) >= 60 ? 'text-emerald-700' : 'text-amber-700'
+                  }`}>
+                    {assessmentDistinctionStatus}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-4">
+                  {assessmentHasDeficit ? '⚠️ Action recommended in 1 subject' : 'Consistent performance across subjects'}
+                </p>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Evaluated Credits</span>
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-800">{assessmentTotalCredits}</span>
+                  <span className="text-xs font-semibold text-slate-400">Credits</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-4">
+                  Total credit weighting for internal assessment
+                </p>
+              </div>
+            </div>
+
+            {/* Continuous Assessment Breakdown Table */}
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    Subject-Wise Continuous Assessment Marks
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Live evaluations submitted by course faculty from the Faculty Portal
+                  </p>
+                </div>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                  {assessmentMarks.length} Course Subjects
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-500 font-bold uppercase text-[11px] tracking-wider">
+                      <th className="py-3 px-4">Subject Code & Course Title</th>
+                      <th className="py-3 px-4">Faculty Instructor</th>
+                      <th className="py-3 px-4 text-center">Credits</th>
+                      <th className="py-3 px-4">Internal Marks (/100)</th>
+                      <th className="py-3 px-4 text-center">Grade</th>
+                      <th className="py-3 px-4 text-center">Standing</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {assessmentMarks.map((c) => {
+                      const score = parseFloat(c.internal) || 0;
+                      const isPassing = score >= 50;
+                      return (
+                        <tr key={c.id || c.code} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3.5 px-4 font-medium text-slate-800">
+                            <div className="font-bold text-slate-900">{c.code}</div>
+                            <div className="text-xs text-slate-500">{c.title}</div>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-600 font-medium">
+                            {c.faculty || 'Course Faculty'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-bold text-slate-700">
+                            {c.credits || 4}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-3">
+                              <span className="font-extrabold text-sm text-slate-900 w-16">
+                                {score} <span className="text-xs font-normal text-slate-400">/ 100</span>
+                              </span>
+                              <div className="w-28 bg-slate-100 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    score >= 75
+                                      ? 'bg-emerald-500'
+                                      : score >= 60
+                                      ? 'bg-indigo-500'
+                                      : score >= 50
+                                      ? 'bg-amber-500'
+                                      : 'bg-rose-500'
+                                  }`}
+                                  style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-700">
+                              {c.grade || (score >= 90 ? 'Grade O' : score >= 80 ? 'Grade A+' : score >= 70 ? 'Grade A' : score >= 60 ? 'Grade B+' : score >= 50 ? 'Grade B' : 'Grade F')}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                isPassing
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}
+                            >
+                              {isPassing ? 'Satisfactory' : 'Needs Attention'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t-2 border-slate-200 font-bold text-slate-800">
+                      <td colSpan="2" className="py-4 px-4 text-slate-900 font-black">
+                        Aggregate Course Assessment Summary
+                      </td>
+                      <td className="py-4 px-4 text-center font-black">
+                        {assessmentTotalCredits} Credits
+                      </td>
+                      <td className="py-4 px-4 font-black">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-black text-slate-900">
+                            {assessmentTotalScored} <span className="text-xs font-normal text-slate-500">/ {assessmentMaxMarks}</span>
+                          </span>
+                          <span className="text-xs font-black px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                            {assessmentTotalPercentage}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className="px-2 py-1 rounded bg-indigo-50 text-indigo-700 font-black text-xs">
+                          {assessmentDistinctionStatus}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          !assessmentHasDeficit
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {!assessmentHasDeficit ? 'Good Standing' : 'Deficit Detected'}
+                        </span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Informational Callout: Continuous Assessment vs End-Semester Transcripts */}
+            <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-5 flex items-start gap-4">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700 shrink-0 mt-0.5">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="text-xs text-blue-900 leading-relaxed">
+                <p className="font-bold text-sm text-blue-950 mb-1">
+                  Distinct Academic Assessment Framework
+                </p>
+                <p>
+                  <strong>Continuous Assessment Marks:</strong> Shown above are internal marks out of 100 representing ongoing quizzes, midterm tests, lab evaluations, and assignments entered directly by faculty members via the Faculty Portal.
+                </p>
+                <p className="mt-1 text-blue-800">
+                  <strong>Official 8-Semester Marksheets:</strong> Tab 3 contains official end-term academic transcripts with credits, grade points, SGPA, and cumulative CGPA across Semesters 1 through 8. Continuous internal assessment marks do not replace end-semester marksheet records.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: DETAILED FINANCIALS & FEE PAYMENTS */}
         {activeTab === 'fees' && (
           <div className="space-y-6 animate-fade-in">
             {/* High-level fee metrics */}

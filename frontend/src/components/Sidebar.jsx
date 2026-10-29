@@ -53,10 +53,11 @@ export default function Sidebar() {
     { to: '/student?tab=overview', label: '1. Academic Overview & CGPA', icon: TrendingUp },
     { to: '/student?tab=attendance', label: '2. Live Attendance Records', icon: CalendarCheck },
     { to: '/student?tab=marks', label: '3. 8-Semester Marksheets', icon: Award },
-    { to: '/student?tab=fees', label: '4. Financials & Fee Payments', icon: CreditCard },
-    { to: '/student?tab=schedule', label: '5. Class Timetable', icon: Clock },
-    { to: '/student?tab=profile', label: '6. Profile & Document Vault', icon: UserCheck },
-    { to: '/student?tab=messages', label: '7. AI Risk & Faculty Alerts', icon: MessageSquare },
+    { to: '/student?tab=assessments', label: '4. Course Assessments & Internal Marks', icon: FileSpreadsheet },
+    { to: '/student?tab=fees', label: '5. Financials & Fee Payments', icon: CreditCard },
+    { to: '/student?tab=schedule', label: '6. Class Timetable', icon: Clock },
+    { to: '/student?tab=profile', label: '7. Profile & Document Vault', icon: UserCheck },
+    { to: '/student?tab=messages', label: '8. AI Risk & Faculty Alerts', icon: MessageSquare },
   ];
 
   const getLinks = () => {
