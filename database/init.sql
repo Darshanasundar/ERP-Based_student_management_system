@@ -222,3 +222,30 @@ CREATE TABLE IF NOT EXISTS leaves (
 CREATE INDEX IF NOT EXISTS idx_leaves_faculty_email ON leaves(faculty_email);
 CREATE INDEX IF NOT EXISTS idx_leaves_status ON leaves(status);
 
+-- ==========================================
+-- SEED DATA: Departments, Users, and Students
+-- ==========================================
+
+-- 1. Insert Department
+INSERT INTO departments (id, name, description)
+VALUES 
+    ('bfbd9a42-0e41-4629-8473-36c0b7fb7069', 'Computer Science and Engineering', 'Department of Computer Science & Engineering')
+ON CONFLICT (id) DO NOTHING;
+
+-- 2. Insert Users (Admin, Faculty, Student)
+-- admin@erp.com       / admin@123
+-- faculty@erp.com     / faculty@123
+-- alex.turner@erp.com / student123
+INSERT INTO users (id, email, password_hash, role, is_active)
+VALUES 
+    ('64005ce7-e51f-4ee5-befc-9a7e12d21d97', 'admin@erp.com', '$2b$10$6HW0ndeqfwMHXNTnc2k/5.gb4y766T3w896gMH0TkEqwZqQVGq5a6', 'SUPER_ADMIN', true),
+    ('2967fd8a-900d-464e-83fc-b66e4079c8a9', 'faculty@erp.com', '$2b$10$a2XQSP8i8GcHDDa2Ca2dU.93dhx8GNW1xkUk0zlFid3xVg2CIVIku', 'TEACHER', true),
+    ('e0e6db2d-6906-421c-a710-499bf39e75ef', 'alex.turner@erp.com', '$2b$10$CeR31C7iNNcIJWTJm3pnlu2jVRSda.pblRIuGP9bJhhswWHeQj5ka', 'STUDENT', true)
+ON CONFLICT (email) DO NOTHING;
+
+-- 3. Insert Student Record
+INSERT INTO students (id, user_id, department_id, enrollment_number, date_of_birth)
+VALUES 
+    ('0937df8b-2b8f-49a7-bfee-84eace226eec', 'e0e6db2d-6906-421c-a710-499bf39e75ef', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 'STU-2026-CCF9BC', '2004-05-15')
+ON CONFLICT (enrollment_number) DO NOTHING;
+
