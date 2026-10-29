@@ -7,15 +7,7 @@
     },
     "backend": {
       "root": "backend",
-      "framework": "express",
-      "bindings": [
-        {
-          "type": "service",
-          "service": "ml-service",
-          "format": "url",
-          "env": "ML_SERVICE_URL"
-        }
-      ]
+      "framework": "express"
     },
     "ml-service": {
       "root": "ml-service",
