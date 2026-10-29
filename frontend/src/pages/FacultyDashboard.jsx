@@ -55,7 +55,7 @@ export default function FacultyDashboard() {
 
   const [courses, setCourses] = useState(DEFAULT_COURSES);
   const [selectedCourseId, setSelectedCourseId] = useState('27d6a359-8570-4e13-b2a8-73e03546e31e');
-  const [gradingViewMode, setGradingViewMode] = useState('single'); // 'single' | 'matrix'
+  const [gradingSearch, setGradingSearch] = useState('');
   const [highRiskSubjectFilter, setHighRiskSubjectFilter] = useState('ALL');
   const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [toastMessage, setToastMessage] = useState(null);
@@ -888,48 +888,43 @@ export default function FacultyDashboard() {
     }
   };
 
-  const handleSaveMarksAndAssessRisk = (student) => {
-    handleSaveSubjectMarksAndAssessRisk(student, selectedCourseId);
-  };
-
-  // Batch Save all marks for the selected course
-  const handleBatchSaveSubjectMarks = async () => {
-    setSaving(true);
+  // Save all subject marks & evaluate multi-factor AI risk for a single student
+  const handleSaveStudentAllSubjects = async (student) => {
     try {
-      const liveAlex = roster.find((s) => s.isLiveDbUser);
-      if (liveAlex) {
-        const alexScore = getStudentSubjectMark(liveAlex, selectedCourseId);
-        await api.post('/marks', {
-          student_id: liveAlex.id,
-          course_id: selectedCourseId,
-          marks: alexScore,
-        });
+      setToastMessage(`🧠 AI Risk Engine: Evaluating continuous marks across all subjects for ${student.name}...`);
+      if (student.isLiveDbUser) {
+        for (const course of courses) {
+          const mark = getStudentSubjectMark(student, course.id);
+          await api.post('/marks', {
+            student_id: student.id,
+            course_id: course.id,
+            marks: mark,
+          });
+        }
       }
 
       setRoster((prev) =>
         prev.map((s) => {
-          const mark = getStudentSubjectMark(s, selectedCourseId);
-          const att = getStudentSubjectAttendance(s, selectedCourseId);
-          const diag = computeRiskDiagnosis(mark, att);
-          const grade = getGradeFromScore(mark);
-
-          const updatedSubjMarks = {
-            ...(s.subjectMarks || {}),
-            [selectedCourseId]: {
-              ...(s.subjectMarks?.[selectedCourseId] || {}),
+          if (s.id !== student.id) return s;
+          const updatedSubjMarks = { ...(s.subjectMarks || {}) };
+          courses.forEach((c) => {
+            const mark = getStudentSubjectMark(s, c.id);
+            const att = getStudentSubjectAttendance(s, c.id);
+            const diag = computeRiskDiagnosis(mark, att);
+            updatedSubjMarks[c.id] = {
+              ...(updatedSubjMarks[c.id] || {}),
               marks: mark,
               attendance: att,
-              grade,
+              grade: getGradeFromScore(mark),
               riskScore: diag.riskScore,
               riskStatus: diag.riskStatus,
               severityLevel: diag.severityLevel,
               primaryFactors: diag.primaryFactors,
               recommendations: diag.recommendations,
-            },
-          };
+            };
+          });
 
           const overall = evaluateOverallStudentRisk(updatedSubjMarks, s);
-
           return {
             ...s,
             subjectMarks: updatedSubjMarks,
@@ -943,15 +938,82 @@ export default function FacultyDashboard() {
         })
       );
 
-      setToastMessage(`✓ Batch Posted: All student internal marks for "${selectedCourse.name}" saved & evaluated!`);
+      setToastMessage(`✓ All subject marks & AI risk successfully saved for ${student.name}!`);
+      setTimeout(() => {
+        setRoster((prev) => prev.map((s) => (s.id === student.id ? { ...s, isGlowing: false } : s)));
+        setToastMessage(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Save student subject marks error:', err);
+      setToastMessage('Error saving marks for student.');
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
+  const handleSaveMarksAndAssessRisk = (student) => {
+    handleSaveStudentAllSubjects(student);
+  };
+
+  // Batch Save all marks across all students and all curriculum subjects
+  const handleSaveAndPostAllSubjectsMarks = async () => {
+    setSaving(true);
+    setToastMessage('🧠 AI Risk Engine: Posting all subject marks and assessing cohort risk...');
+    try {
+      const liveAlex = roster.find((s) => s.isLiveDbUser);
+      if (liveAlex) {
+        for (const course of courses) {
+          const mark = getStudentSubjectMark(liveAlex, course.id);
+          await api.post('/marks', {
+            student_id: liveAlex.id,
+            course_id: course.id,
+            marks: mark,
+          });
+        }
+      }
+
+      setRoster((prev) =>
+        prev.map((s) => {
+          const updatedSubjMarks = { ...(s.subjectMarks || {}) };
+          courses.forEach((c) => {
+            const mark = getStudentSubjectMark(s, c.id);
+            const att = getStudentSubjectAttendance(s, c.id);
+            const diag = computeRiskDiagnosis(mark, att);
+            updatedSubjMarks[c.id] = {
+              ...(updatedSubjMarks[c.id] || {}),
+              marks: mark,
+              attendance: att,
+              grade: getGradeFromScore(mark),
+              riskScore: diag.riskScore,
+              riskStatus: diag.riskStatus,
+              severityLevel: diag.severityLevel,
+              primaryFactors: diag.primaryFactors,
+              recommendations: diag.recommendations,
+            };
+          });
+
+          const overall = evaluateOverallStudentRisk(updatedSubjMarks, s);
+          return {
+            ...s,
+            subjectMarks: updatedSubjMarks,
+            riskScore: overall.riskScore,
+            riskStatus: overall.riskStatus,
+            severityLevel: overall.severityLevel,
+            primaryFactors: overall.primaryFactors,
+            recommendations: overall.recommendations,
+            isGlowing: true,
+          };
+        })
+      );
+
+      setToastMessage('✓ All subject marks posted & real-time risk updated for all students!');
       setTimeout(() => {
         setRoster((prev) => prev.map((s) => ({ ...s, isGlowing: false })));
         setToastMessage(null);
-      }, 4000);
+      }, 3500);
     } catch (err) {
       console.error('Batch save error:', err);
-      setToastMessage('Error saving batch marks.');
-      setTimeout(() => setToastMessage(null), 3500);
+      setToastMessage('Error saving all marks.');
+      setTimeout(() => setToastMessage(null), 3000);
     } finally {
       setSaving(false);
     }
@@ -1259,6 +1321,16 @@ export default function FacultyDashboard() {
     const diag = getStudentSubjectDiagnosis(s, selectedCourseId);
     return diag.riskStatus === 'High Risk' || mark < 50;
   }).length;
+
+  const matrixPassingStudents = roster.filter((s) => courses.every((c) => getStudentSubjectMark(s, c.id) >= 50));
+  const matrixCohortPassRate = roster.length > 0 ? Math.round((matrixPassingStudents.length / roster.length) * 100) : 0;
+  const matrixAtRiskStudentsCount = roster.filter((s) => s.riskStatus === 'High Risk' || s.riskScore >= 0.70 || courses.some((c) => getStudentSubjectMark(s, c.id) < 50)).length;
+
+  const filteredMatrixRoster = roster.filter((s) => {
+    if (!gradingSearch.trim()) return true;
+    const q = gradingSearch.toLowerCase();
+    return s.name.toLowerCase().includes(q) || s.rollNo.toLowerCase().includes(q) || s.email.toLowerCase().includes(q);
+  });
 
   return (
     <DashboardLayout>
@@ -1571,419 +1643,235 @@ export default function FacultyDashboard() {
           </div>
         )}
 
-        {/* TAB 2: COURSE GRADING & SUBJECT-WISE INTERNAL MARKS ENTRY */}
+        {/* TAB 2: COURSE GRADING & CROSS-SUBJECT INTERNAL MARKS ENTRY MATRIX */}
         {activeTab === 'grading' && (
           <div className="space-y-6 animate-fade-in">
-            {/* Subject Selector Pills & View Mode Bar */}
-            <div className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-xs">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mr-1">
-                  <BookOpen className="w-4 h-4 text-indigo-600" />
-                  <span>Select Subject:</span>
-                </span>
-                {courses.map((course) => {
-                  const isSelected = course.id === selectedCourseId;
-                  const atRiskForSubj = roster.filter((s) => {
-                    const mark = getStudentSubjectMark(s, course.id);
-                    const diag = getStudentSubjectDiagnosis(s, course.id);
-                    return diag.riskStatus === 'High Risk' || mark < 50;
-                  }).length;
-
-                  return (
-                    <button
-                      key={course.id}
-                      type="button"
-                      onClick={() => setSelectedCourseId(course.id)}
-                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-200'
-                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
-                      }`}
-                    >
-                      <span className="font-mono">{course.code}</span>
-                      <span className="hidden sm:inline">• {course.name}</span>
-                      {atRiskForSubj > 0 && (
-                        <span
-                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                            isSelected ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'
-                          }`}
-                        >
-                          {atRiskForSubj} at risk
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+            {/* Executive Hero Banner & Multi-Subject Actions */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0 mt-0.5">
+                  <Table className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 uppercase tracking-wider">
+                      Continuous Assessment System
+                    </span>
+                    <span className="text-xs font-semibold text-slate-400">• All Curriculum Subjects</span>
+                  </div>
+                  <h2 className="text-lg font-bold text-slate-900 mt-1">
+                    Subject-Wise Internal Marks & AI Risk Assessment Matrix
+                  </h2>
+                  <p className="text-xs text-slate-600 mt-1 max-w-2xl">
+                    Enter continuous internal evaluation marks (/100) across all enrolled courses in one unified spreadsheet. The multi-factor AI Risk engine assesses subject-level deficits and continuously recomputes cumulative semester risk.
+                  </p>
+                </div>
               </div>
 
-              {/* View Switcher: Single Course vs Full Matrix */}
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-start lg:self-auto">
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setGradingViewMode('single')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    gradingViewMode === 'single'
-                      ? 'bg-white text-indigo-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  onClick={handleSaveAndPostAllSubjectsMarks}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Single Subject</span>
+                  <Save className="w-4 h-4" />
+                  <span>{saving ? 'Posting All Marks...' : 'Save & Post All Marks'}</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setGradingViewMode('matrix')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    gradingViewMode === 'matrix'
-                      ? 'bg-white text-indigo-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  onClick={handleReevaluateAll}
+                  disabled={evaluatingAll}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                  title="Re-run AI Multi-Factor Risk Assessment across all subjects"
                 >
-                  <Table className="w-3.5 h-3.5" />
-                  <span>Subject-Wise Matrix</span>
+                  <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${evaluatingAll ? 'animate-spin' : ''}`} />
+                  <span>{evaluatingAll ? 'Analyzing...' : 'Re-Evaluate All Matrix Risk'}</span>
                 </button>
               </div>
             </div>
 
-            {/* SINGLE SUBJECT GRADING VIEW */}
-            {gradingViewMode === 'single' && (
-              <div className="space-y-6">
-                {/* Active Subject Banner & Live Metrics */}
-                <div className="bg-gradient-to-r from-white via-indigo-50/40 to-white border border-indigo-200 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-5 shadow-xs">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0">
-                      <FileSpreadsheet className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                          {selectedCourse.code}
-                        </span>
-                        <h3 className="text-base font-bold text-slate-900">
-                          {selectedCourse.name} • Internal Marks Entry
-                        </h3>
-                      </div>
-                      <p className="text-xs text-slate-600 mt-1">
-                        Continuous assessment internal mark out of 100. AI risk engine analyzes subject performance and predicts semester outcome.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 3 Subject Quick KPIs & Batch Actions */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-center shadow-xs">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Class Average</span>
-                      <span className="text-sm font-extrabold text-slate-900 font-mono">
-                        {selectedSubjectAvg} <span className="text-[10px] text-slate-400">/ 100</span>
-                      </span>
-                    </div>
-
-                    <div className="bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-center shadow-xs">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Pass Rate</span>
-                      <span className="text-sm font-extrabold text-emerald-600 font-mono">
-                        {selectedSubjectPassRate}%
-                      </span>
-                    </div>
-
-                    <div className="bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-center shadow-xs">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">At-Risk Count</span>
-                      <span className={`text-sm font-extrabold font-mono ${selectedSubjectAtRiskCount > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
-                        {selectedSubjectAtRiskCount} Students
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleBatchSaveSubjectMarks}
-                        disabled={saving}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>{saving ? 'Posting...' : `Post All ${selectedCourse.code}`}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReevaluateSubjectRisk(selectedCourse.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
-                        title="Re-run AI Risk Model on this Subject"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Assess Risk</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Subject-Wise Grading Table */}
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-700">
-                      <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-semibold tracking-wider border-b border-slate-200">
-                        <tr>
-                          <th scope="col" className="px-6 py-4">Student Name & Roll No</th>
-                          <th scope="col" className="px-6 py-4 text-center">Subject Attendance</th>
-                          <th scope="col" className="px-6 py-4 text-center">Internal Score (/100)</th>
-                          <th scope="col" className="px-6 py-4 text-center">Grade Estimate</th>
-                          <th scope="col" className="px-6 py-4 text-center">Subject AI Risk Standing</th>
-                          <th scope="col" className="px-6 py-4 text-right">Submit & Post Marks</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {roster.map((student) => {
-                          const isAlex = student.isLiveDbUser;
-                          const currentScore = getStudentSubjectMark(student, selectedCourse.id);
-                          const subjectAtt = getStudentSubjectAttendance(student, selectedCourse.id);
-                          const gradeEstimate = getGradeFromScore(currentScore);
-                          const subjDiag = getStudentSubjectDiagnosis(student, selectedCourse.id);
-
-                          return (
-                            <tr
-                              key={student.id}
-                              className={`transition-colors ${
-                                isAlex ? 'bg-indigo-50/40 hover:bg-indigo-50/70 border-l-4 border-l-indigo-600' : 'hover:bg-slate-50/80'
-                              } ${student.isGlowing ? 'bg-indigo-100/60' : ''}`}
-                            >
-                              <td className="px-6 py-4">
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs ${
-                                      isAlex
-                                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-200'
-                                        : 'bg-slate-100 border border-slate-200 text-slate-700'
-                                    }`}
-                                  >
-                                    {student.name.charAt(0)}
-                                  </div>
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                      <p className="font-bold text-slate-900 leading-tight">{student.name}</p>
-                                      {isAlex && (
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                          LIVE DB
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-slate-500 font-mono mt-0.5">
-                                      {student.rollNo} • {student.email}
-                                    </p>
-                                  </div>
-                                </div>
-                              </td>
-
-                              <td className="px-6 py-4 text-center">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
-                                    subjectAtt >= 75
-                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                      : subjectAtt >= 65
-                                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                      : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                  }`}
-                                >
-                                  {subjectAtt.toFixed(1)}%
-                                </span>
-                              </td>
-
-                              <td className="px-6 py-4 text-center">
-                                <div className="inline-flex items-center gap-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={currentScore}
-                                    onChange={(e) => handleSubjectMarkChange(student.id, selectedCourse.id, e.target.value)}
-                                    className="w-16 bg-white border border-slate-300 focus:border-indigo-600 rounded-lg px-2 py-1.5 text-center font-mono font-bold text-slate-900 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs"
-                                  />
-                                  <span className="text-xs text-slate-400 font-mono">/ 100</span>
-                                </div>
-                              </td>
-
-                              <td className="px-6 py-4 text-center">
-                                <span
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${
-                                    gradeEstimate === 'O' || gradeEstimate === 'A+'
-                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                      : gradeEstimate === 'A' || gradeEstimate === 'B+' || gradeEstimate === 'B'
-                                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                      : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                  }`}
-                                >
-                                  Grade {gradeEstimate}
-                                </span>
-                              </td>
-
-                              <td className="px-6 py-4 text-center">
-                                <div className="flex flex-col items-center gap-1">
-                                  {getRiskBadge(subjDiag.riskStatus, student.isGlowing)}
-                                  <span className="text-[10px] font-mono text-slate-400 font-semibold">
-                                    Risk Index: {Math.round(subjDiag.riskScore * 100)}%
-                                  </span>
-                                </div>
-                              </td>
-
-                              <td className="px-6 py-4 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveSubjectMarksAndAssessRisk(student, selectedCourse.id)}
-                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
-                                >
-                                  <span>Post Marks</span>
-                                  <ArrowUpRight className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+            {/* 4 Summary Stat Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Total Enrolled</span>
+                <span className="text-xl font-extrabold text-slate-900 font-mono mt-0.5 block">{roster.length}</span>
+                <span className="text-[11px] text-slate-500 mt-1 block">Active students in cohort</span>
               </div>
-            )}
-
-            {/* ALL-SUBJECTS MATRIX SPREADSHEET VIEW */}
-            {gradingViewMode === 'matrix' && (
-              <div className="space-y-4">
-                <div className="bg-white border border-slate-200 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <Table className="w-4 h-4 text-indigo-600" />
-                      Cross-Subject Marks Entry Matrix
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Enter continuous evaluation marks across all core subjects in one unified spreadsheet. The AI engine recalculates subject and cumulative academic risk in real time.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleReevaluateAll}
-                    disabled={evaluatingAll}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${evaluatingAll ? 'animate-spin' : ''}`} />
-                    <span>{evaluatingAll ? 'Analyzing...' : 'Re-Evaluate All Matrix Risk'}</span>
-                  </button>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-700">
-                      <thead className="bg-slate-50 uppercase text-[10px] text-slate-500 font-bold border-b border-slate-200">
-                        <tr>
-                          <th scope="col" className="px-4 py-3 min-w-[200px]">Student Details</th>
-                          {courses.map((course) => (
-                            <th key={course.id} scope="col" className="px-4 py-3 text-center min-w-[130px]">
-                              <div>{course.code}</div>
-                              <div className="text-[9px] font-normal text-slate-400 capitalize">{course.name}</div>
-                            </th>
-                          ))}
-                          <th scope="col" className="px-4 py-3 text-center min-w-[140px]">Cumulative AI Risk</th>
-                          <th scope="col" className="px-4 py-3 text-right min-w-[100px]">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium">
-                        {roster.map((student) => {
-                          const isAlex = student.isLiveDbUser;
-
-                          return (
-                            <tr
-                              key={student.id}
-                              className={`transition-colors ${
-                                isAlex ? 'bg-indigo-50/30 hover:bg-indigo-50/60 border-l-4 border-l-indigo-600' : 'hover:bg-slate-50/60'
-                              }`}
-                            >
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2.5">
-                                  <div
-                                    className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
-                                      isAlex ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'
-                                    }`}
-                                  >
-                                    {student.name.charAt(0)}
-                                  </div>
-                                  <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <p className="font-bold text-slate-900 leading-tight">{student.name}</p>
-                                      {isAlex && (
-                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">
-                                          LIVE
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[10px] text-slate-500 font-mono">{student.rollNo}</p>
-                                  </div>
-                                </div>
-                              </td>
-
-                              {courses.map((course) => {
-                                const currentScore = getStudentSubjectMark(student, course.id);
-                                const grade = getGradeFromScore(currentScore);
-                                const diag = getStudentSubjectDiagnosis(student, course.id);
-                                const isFail = currentScore < 50;
-
-                                return (
-                                  <td key={course.id} className="px-4 py-3 text-center">
-                                    <div className="inline-flex flex-col items-center gap-1">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={currentScore}
-                                        onChange={(e) => handleSubjectMarkChange(student.id, course.id, e.target.value)}
-                                        className={`w-14 text-center font-mono font-bold text-xs py-1 px-1.5 rounded-lg border transition-all ${
-                                          isFail
-                                            ? 'bg-rose-50 border-rose-300 text-rose-700 font-black'
-                                            : 'bg-white border-slate-200 text-slate-900'
-                                        }`}
-                                      />
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-[9px] font-mono font-semibold px-1 py-0.2 rounded bg-slate-100 text-slate-600">
-                                          {grade}
-                                        </span>
-                                        <span
-                                          className={`w-1.5 h-1.5 rounded-full ${
-                                            diag.riskStatus === 'High Risk'
-                                              ? 'bg-rose-500'
-                                              : diag.riskStatus === 'Medium Risk'
-                                              ? 'bg-amber-500'
-                                              : 'bg-emerald-500'
-                                          }`}
-                                          title={`Risk: ${Math.round(diag.riskScore * 100)}%`}
-                                        />
-                                      </div>
-                                    </div>
-                                  </td>
-                                );
-                              })}
-
-                              <td className="px-4 py-3 text-center">
-                                <div className="inline-flex flex-col items-center gap-0.5">
-                                  {getRiskBadge(student.riskStatus, student.isGlowing)}
-                                  <span className="text-[10px] font-mono text-slate-400">
-                                    {Math.round(student.riskScore * 100)}% Index
-                                  </span>
-                                </div>
-                              </td>
-
-                              <td className="px-4 py-3 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveSubjectMarksAndAssessRisk(student, selectedCourseId)}
-                                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
-                                >
-                                  Save
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Subjects Evaluated</span>
+                <span className="text-xl font-extrabold text-indigo-600 font-mono mt-0.5 block">{courses.length}</span>
+                <span className="text-[11px] text-slate-500 mt-1 block">CS301, CS302, CS303, CS304</span>
               </div>
-            )}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Cohort Pass Rate</span>
+                <span className="text-xl font-extrabold text-emerald-600 font-mono mt-0.5 block">{matrixCohortPassRate}%</span>
+                <span className="text-[11px] text-slate-500 mt-1 block">Passing all subjects (≥50)</span>
+              </div>
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">At-Risk Students</span>
+                <span className={`text-xl font-extrabold font-mono mt-0.5 block ${matrixAtRiskStudentsCount > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                  {matrixAtRiskStudentsCount}
+                </span>
+                <span className="text-[11px] text-slate-500 mt-1 block">Requiring academic action</span>
+              </div>
+            </div>
+
+            {/* Search Filter Bar */}
+            <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={gradingSearch}
+                  onChange={(e) => setGradingSearch(e.target.value)}
+                  placeholder="Filter student by name, roll no, or email..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:bg-white focus:border-indigo-500"
+                />
+              </div>
+              <div className="text-xs text-slate-500 font-medium">
+                Showing <span className="font-bold text-slate-900">{filteredMatrixRoster.length}</span> of {roster.length} students
+              </div>
+            </div>
+
+            {/* Subject-Wise Matrix Table */}
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50 uppercase text-[10px] text-slate-500 font-bold border-b border-slate-200 tracking-wider">
+                    <tr>
+                      <th scope="col" className="px-5 py-4 min-w-[220px]">Student Details</th>
+                      {courses.map((course) => (
+                        <th key={course.id} scope="col" className="px-4 py-4 text-center min-w-[150px]">
+                          <div className="font-mono font-bold text-indigo-700 text-xs">{course.code}</div>
+                          <div className="text-[10px] font-medium text-slate-600 normal-case">{course.name}</div>
+                          <div className="text-[9px] text-slate-400 font-normal">({course.credits} Credits)</div>
+                        </th>
+                      ))}
+                      <th scope="col" className="px-5 py-4 text-center min-w-[160px]">Cumulative AI Risk</th>
+                      <th scope="col" className="px-5 py-4 text-right min-w-[120px]">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {filteredMatrixRoster.map((student) => {
+                      const isAlex = student.isLiveDbUser;
+
+                      return (
+                        <tr
+                          key={student.id}
+                          className={`transition-colors ${
+                            isAlex ? 'bg-indigo-50/30 hover:bg-indigo-50/60 border-l-4 border-l-indigo-600' : 'hover:bg-slate-50/70'
+                          } ${student.isGlowing ? 'bg-indigo-100/50' : ''}`}
+                        >
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                                  isAlex ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 border border-slate-200 text-slate-700'
+                                }`}
+                              >
+                                {student.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="font-bold text-slate-900 leading-tight text-xs">{student.name}</p>
+                                  {isAlex && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                      LIVE DB
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                  {student.rollNo} • {student.email}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {courses.map((course) => {
+                            const currentScore = getStudentSubjectMark(student, course.id);
+                            const currentAtt = getStudentSubjectAttendance(student, course.id);
+                            const grade = getGradeFromScore(currentScore);
+                            const diag = getStudentSubjectDiagnosis(student, course.id);
+                            const isFail = currentScore < 50;
+
+                            return (
+                              <td key={course.id} className="px-4 py-4 text-center">
+                                <div className="inline-flex flex-col items-center gap-1.5">
+                                  <div className="inline-flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={currentScore}
+                                      onChange={(e) => handleSubjectMarkChange(student.id, course.id, e.target.value)}
+                                      className={`w-16 text-center font-mono font-bold text-xs py-1.5 px-2 rounded-lg border transition-all ${
+                                        isFail
+                                          ? 'bg-rose-50 border-rose-300 text-rose-700 font-black'
+                                          : 'bg-white border-slate-300 text-slate-900 focus:border-indigo-600'
+                                      } focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs`}
+                                    />
+                                    <span className="text-[10px] text-slate-400 font-mono">/100</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
+                                        grade === 'F'
+                                          ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                          : grade === 'O' || grade === 'A+'
+                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                          : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                      }`}
+                                    >
+                                      {grade}
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 font-mono" title={`Subject Attendance: ${currentAtt.toFixed(0)}%`}>
+                                      {currentAtt.toFixed(0)}% att
+                                    </span>
+                                    <span
+                                      className={`w-2 h-2 rounded-full ${
+                                        diag.riskStatus === 'High Risk'
+                                          ? 'bg-rose-500 animate-pulse'
+                                          : diag.riskStatus === 'Medium Risk'
+                                          ? 'bg-amber-500'
+                                          : 'bg-emerald-500'
+                                      }`}
+                                      title={`Subject Risk: ${diag.riskStatus} (${Math.round(diag.riskScore * 100)}%)`}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          })}
+
+                          <td className="px-5 py-4 text-center">
+                            <div className="inline-flex flex-col items-center gap-1">
+                              {getRiskBadge(student.riskStatus, student.isGlowing)}
+                              <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                                {Math.round(student.riskScore * 100)}% Risk Index
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleSaveStudentAllSubjects(student)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs"
+                            >
+                              <Save className="w-3.5 h-3.5" />
+                              <span>Save Marks</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
