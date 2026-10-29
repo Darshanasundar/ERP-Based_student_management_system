@@ -43,9 +43,10 @@ export default function Sidebar() {
   const facultyLinks = [
     { to: '/faculty?tab=attendance', label: '1. Daily Attendance', icon: CalendarCheck },
     { to: '/faculty?tab=grading', label: '2. Course Grading & Marks', icon: FileSpreadsheet },
-    { to: '/faculty?tab=airisk', label: '3. AI Risk & Student Alerts', icon: AlertTriangle },
-    { to: '/faculty?tab=schedule', label: '4. Teaching Timetable', icon: Clock },
-    { to: '/faculty?tab=leave', label: '5. HR Leave Management', icon: Briefcase },
+    { to: '/faculty?tab=highrisk', label: '3. High-Risk Students', icon: AlertTriangle, badge: 'High Risk' },
+    { to: '/faculty?tab=airisk', label: '4. AI Risk Predictor & Alerts', icon: TrendingUp },
+    { to: '/faculty?tab=schedule', label: '5. Teaching Timetable', icon: Clock },
+    { to: '/faculty?tab=leave', label: '6. HR Leave Management', icon: Briefcase },
   ];
 
   const studentLinks = [
@@ -101,14 +102,21 @@ export default function Sidebar() {
                 <Link
                   key={idx}
                   to={link.to}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     active
                       ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${active ? 'text-indigo-600' : 'text-slate-500'}`} />
-                  <span>{link.label}</span>
+                  <div className="flex items-center gap-3">
+                    <Icon className={`w-4 h-4 ${active ? 'text-indigo-600' : 'text-slate-500'}`} />
+                    <span>{link.label}</span>
+                  </div>
+                  {link.badge && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
+                      Alert
+                    </span>
+                  )}
                 </Link>
               );
             })}
