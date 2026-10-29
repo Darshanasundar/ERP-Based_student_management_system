@@ -14,6 +14,8 @@ if (connectionUrl) {
   console.log('[DB] Connecting to PostgreSQL via connection string...');
   poolConfig = {
     connectionString: connectionUrl,
+    max: 5,
+    idleTimeoutMillis: 10000,
     ssl:
       connectionUrl.includes('localhost') ||
       connectionUrl.includes('@db:')
@@ -50,11 +52,20 @@ if (connectionUrl) {
   };
 }
 
-const pool = new Pool(poolConfig);
+// Cache pool across serverless function invocations to avoid reconnection overhead
+if (!global._erpPgPool) {
+  global._erpPgPool = new Pool({
+    ...poolConfig,
+    max: 10,
+    idleTimeoutMillis: 30000,
+  });
 
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle PostgreSQL client:', err);
-});
+  global._erpPgPool.on('error', (err) => {
+    console.error('Unexpected error on idle PostgreSQL client:', err);
+  });
+}
+
+const pool = global._erpPgPool;
 
 async function testConnection() {
   try {

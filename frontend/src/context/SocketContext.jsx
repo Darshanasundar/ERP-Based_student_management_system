@@ -21,24 +21,30 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    // Determine target URL for WebSocket server
-    const backendEnvUrl = import.meta.env.VITE_BACKEND_URL
-      ? import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '')
-      : null;
+    // On Vercel serverless, WebSockets are disabled unless a dedicated WS server is provided
+    const isVercel = window.location.hostname.endsWith('vercel.app');
+    const wsUrl = import.meta.env.VITE_WS_URL;
+
+    if (isVercel && !wsUrl) {
+      console.log('[Socket] Serverless deployment detected. Real-time WebSockets polling disabled to maximize speed.');
+      return;
+    }
 
     const targetUrl =
+      wsUrl ||
       backendEnvUrl ||
       (window.location.port === '5173'
         ? 'http://localhost:3000'
         : window.location.origin);
 
-    console.log(`[Socket] Initializing connection to ${targetUrl} with JWT authentication...`);
+    console.log(`[Socket] Initializing connection to ${targetUrl}...`);
 
     const newSocket = io(targetUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      transports: ['websocket'],
+      reconnectionAttempts: 3,
+      reconnectionDelay: 5000,
+      timeout: 5000,
     });
 
     newSocket.on('connect', () => {
