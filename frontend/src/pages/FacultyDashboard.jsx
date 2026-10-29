@@ -899,6 +899,7 @@ export default function FacultyDashboard() {
             student_id: student.id,
             course_id: course.id,
             marks: mark,
+            courseName: course.name,
           });
         }
       }
@@ -967,6 +968,7 @@ export default function FacultyDashboard() {
             student_id: liveAlex.id,
             course_id: course.id,
             marks: mark,
+            courseName: course.name,
           });
         }
       }

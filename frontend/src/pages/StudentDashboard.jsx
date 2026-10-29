@@ -257,13 +257,10 @@ export default function StudentDashboard() {
       sgpa: 9.15,
       credits: 22,
       courses: [
-        { code: '23CS601', title: 'Data Structures & Algorithms', credits: 4, internal: 38, external: '-', total: '92', grade: 'Expected O' },
-        { code: '23CS602', title: 'Introduction to Databases', credits: 3, internal: 37, external: '-', total: '88', grade: 'Expected A+' },
-        { code: '23CS603', title: 'Data Analytics & Big Data Tools', credits: 3, internal: 39, external: '-', total: '95', grade: 'Expected O' },
-        { code: '23CS604', title: 'Professional Elective II: NLP & LLMs', credits: 3, internal: 38, external: '-', total: '94', grade: 'Expected O' },
-        { code: '23CS605', title: 'Open Elective I: Fintech & Blockchain', credits: 3, internal: 36, external: '-', total: '86', grade: 'Expected A+' },
-        { code: '23CS606', title: 'AI & Data Science Laboratory', credits: 2, internal: 39, external: '-', total: '98', grade: 'Expected O' },
-        { code: '23CS607', title: 'Mini Project & Product Design', credits: 3, internal: 39, external: '-', total: '96', grade: 'Expected O' },
+        { id: '27d6a359-8570-4e13-b2a8-73e03546e31e', code: 'CS301', title: 'Data Structures & Algorithms', credits: 4, internal: 45, maxMarks: 100, external: '-', total: 45, grade: 'Grade F' },
+        { id: '5bb138c2-848b-4ca3-9719-d8b8b07a719c', code: 'CS302', title: 'Introduction to Databases', credits: 3, internal: 85, maxMarks: 100, external: '-', total: 85, grade: 'Grade A+' },
+        { id: '3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f', code: 'CS303', title: 'Operating Systems', credits: 4, internal: 78, maxMarks: 100, external: '-', total: 78, grade: 'Grade A' },
+        { id: '4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a', code: 'CS304', title: 'Computer Networks', credits: 3, internal: 82, maxMarks: 100, external: '-', total: 82, grade: 'Grade A+' },
       ],
     },
     {
@@ -390,17 +387,11 @@ export default function StudentDashboard() {
   }, []);
 
   // Initial load
-  useEffect(() => {
-    fetchAttendance();
-    fetchMessages();
-    fetchInvoices();
-
-    // Also fetch initial marks from Write-Through Redis cached endpoint
+  const fetchStudentMarks = useCallback(() => {
     api.get(`/marks/student/${ALEX_STUDENT_ID}`)
       .then((res) => {
         if (res.data?.marks && res.data.marks.length > 0) {
           const marksList = res.data.marks;
-          // Set highest risk
           const highestRisk = marksList.reduce(
             (max, m) => ((m.riskScore || 0) > (max.riskScore || 0) ? m : max),
             marksList[0]
@@ -410,25 +401,27 @@ export default function StudentDashboard() {
             score: highestRisk.riskScore || 0.12,
           });
 
-          // Update Semester 6 course records
           setSemestersData((prev) =>
             prev.map((sem) => {
               if (sem.semNumber === 6) {
                 const updatedCourses = sem.courses.map((c) => {
                   const match = marksList.find(
                     (m) =>
+                      (m.courseId && m.courseId === c.id) ||
                       (m.courseName && c.title.toLowerCase().includes(m.courseName.toLowerCase())) ||
                       (m.courseName && m.courseName.toLowerCase().includes(c.title.toLowerCase())) ||
-                      (c.code === '23CS601' && (m.courseName || '').toLowerCase().includes('data structures')) ||
-                      (c.code === '23CS602' && (m.courseName || '').toLowerCase().includes('database'))
+                      (c.code === 'CS301' && (m.courseName || '').toLowerCase().includes('data structures')) ||
+                      (c.code === 'CS302' && (m.courseName || '').toLowerCase().includes('database')) ||
+                      (c.code === 'CS303' && (m.courseName || '').toLowerCase().includes('operating systems')) ||
+                      (c.code === 'CS304' && (m.courseName || '').toLowerCase().includes('computer networks'))
                   );
                   if (match) {
-                    const sc = parseFloat(match.internalScore || 0);
+                    const sc = parseFloat(match.internalScore !== undefined ? match.internalScore : match.marks || 0);
                     return {
                       ...c,
-                      internal: Math.round(sc * 0.4),
-                      total: `${sc}`,
-                      grade: match.grade || (sc >= 90 ? 'Grade O' : sc >= 75 ? 'Grade A+' : sc >= 50 ? 'Grade B' : 'Grade F'),
+                      internal: sc,
+                      total: sc,
+                      grade: match.grade || (sc >= 90 ? 'Grade O' : sc >= 80 ? 'Grade A+' : sc >= 70 ? 'Grade A' : sc >= 60 ? 'Grade B+' : sc >= 50 ? 'Grade B' : 'Grade F'),
                     };
                   }
                   return c;
@@ -441,7 +434,14 @@ export default function StudentDashboard() {
         }
       })
       .catch((e) => console.warn('Marks fetch:', e));
-  }, [fetchAttendance, fetchMessages, fetchInvoices]);
+  }, []);
+
+  useEffect(() => {
+    fetchAttendance();
+    fetchMessages();
+    fetchInvoices();
+    fetchStudentMarks();
+  }, [fetchAttendance, fetchMessages, fetchInvoices, fetchStudentMarks]);
 
   // WebSockets: Real-Time Listeners
   useEffect(() => {
@@ -511,23 +511,26 @@ export default function StudentDashboard() {
       console.log('[WebSocket Event: Student] MARKS_UPDATED received:', data);
 
       if (data.student_id === ALEX_STUDENT_ID || data.studentId === ALEX_STUDENT_ID) {
-        const newScore = parseFloat(data.internal_score || 0);
+        const newScore = parseFloat(data.internal_score !== undefined ? data.internal_score : data.marks || 0);
 
         setSemestersData((prev) =>
           prev.map((sem) => {
             if (sem.semNumber === 6) {
               const updatedCourses = sem.courses.map((c) => {
                 const isMatch =
+                  (data.course_id && c.id && data.course_id === c.id) ||
                   (data.courseName && c.title.toLowerCase().includes(data.courseName.toLowerCase())) ||
                   (data.courseName && data.courseName.toLowerCase().includes(c.title.toLowerCase())) ||
-                  (c.code === '23CS601' && (data.courseName || '').toLowerCase().includes('data structures')) ||
-                  (c.code === '23CS602' && (data.courseName || '').toLowerCase().includes('database'));
+                  (c.code === 'CS301' && (data.courseName || '').toLowerCase().includes('data structures')) ||
+                  (c.code === 'CS302' && (data.courseName || '').toLowerCase().includes('database')) ||
+                  (c.code === 'CS303' && (data.courseName || '').toLowerCase().includes('operating systems')) ||
+                  (c.code === 'CS304' && (data.courseName || '').toLowerCase().includes('computer networks'));
                 if (isMatch) {
                   return {
                     ...c,
-                    internal: Math.round(newScore * 0.4),
-                    total: `${newScore}`,
-                    grade: data.grade || (newScore >= 90 ? 'Grade O' : newScore >= 75 ? 'Grade A+' : newScore >= 50 ? 'Grade B' : 'Grade F'),
+                    internal: newScore,
+                    total: newScore,
+                    grade: data.grade || (newScore >= 90 ? 'Grade O' : newScore >= 80 ? 'Grade A+' : newScore >= 70 ? 'Grade A' : newScore >= 60 ? 'Grade B+' : newScore >= 50 ? 'Grade B' : 'Grade F'),
                   };
                 }
                 return c;
@@ -554,10 +557,12 @@ export default function StudentDashboard() {
           })
         );
 
+        fetchStudentMarks();
+
         setLiveEventBanner({
           type: 'MARKS',
-          title: 'Live Marks & Grade Update Received!',
-          message: `Faculty updated your score in "${data.courseName || 'Data Structures'}" to ${newScore}/100. SGPA recalculated in real time.`,
+          title: 'Live Marks & Percentage Updated by Faculty!',
+          message: `Your score for "${data.courseName || 'Curriculum Subject'}" has been updated to ${newScore}/100. Semester total percentage recomputed in real time.`,
         });
 
         setTimeout(() => setLiveEventBanner(null), 6000);
@@ -584,7 +589,19 @@ export default function StudentDashboard() {
       }
     };
 
-    // 4. Live Faculty Message Event
+    // 4. Batch Marks Update Event
+    const handleBatchMarksUpdated = (data) => {
+      console.log('[WebSocket Event: Student] MARKS_BATCH_UPDATED received:', data);
+      fetchStudentMarks();
+      setLiveEventBanner({
+        type: 'MARKS',
+        title: 'Batch Marks Synchronized by Faculty!',
+        message: `Continuous assessment marks synchronized for ${data.courseName || 'Curriculum Courses'}.`,
+      });
+      setTimeout(() => setLiveEventBanner(null), 6000);
+    };
+
+    // 5. Live Faculty Message Event
     const handleMessageReceived = (data) => {
       console.log('[WebSocket Event: Student] STUDENT_MESSAGE_RECEIVED:', data);
 
@@ -617,16 +634,18 @@ export default function StudentDashboard() {
 
     socket.on('ATTENDANCE_UPDATED', handleAttendanceUpdated);
     socket.on('MARKS_UPDATED', handleMarksUpdated);
+    socket.on('MARKS_BATCH_UPDATED', handleBatchMarksUpdated);
     socket.on('RISK_UPDATED', handleRiskUpdated);
     socket.on('STUDENT_MESSAGE_RECEIVED', handleMessageReceived);
 
     return () => {
       socket.off('ATTENDANCE_UPDATED', handleAttendanceUpdated);
       socket.off('MARKS_UPDATED', handleMarksUpdated);
+      socket.off('MARKS_BATCH_UPDATED', handleBatchMarksUpdated);
       socket.off('RISK_UPDATED', handleRiskUpdated);
       socket.off('STUDENT_MESSAGE_RECEIVED', handleMessageReceived);
     };
-  }, [socket, fetchAttendance]);
+  }, [socket, fetchAttendance, fetchStudentMarks]);
 
   // Payment Execution Handler (Connects to Phase 6 atomic transaction backend POST /api/payments)
   const handleExecutePayment = async (e) => {
@@ -714,6 +733,29 @@ export default function StudentDashboard() {
   const totalOutstandingDues = invoices
     .filter((inv) => inv.status !== 'PAID')
     .reduce((acc, inv) => acc + parseFloat(inv.remainingBalance !== undefined ? inv.remainingBalance : inv.amount), 0);
+
+  // Semester 6 Live Marks & Total Percentage Calculations
+  const sem6 = semestersData.find((s) => s.semNumber === 6);
+  const sem6Courses = sem6?.courses || [];
+  const sem6TotalScored = sem6Courses.reduce(
+    (acc, c) => acc + (parseFloat(c.internal !== undefined ? c.internal : c.total) || 0),
+    0
+  );
+  const sem6MaxMarks = sem6Courses.length * 100 || 400;
+  const sem6TotalPercentage =
+    sem6MaxMarks > 0 ? ((sem6TotalScored / sem6MaxMarks) * 100).toFixed(1) : '0.0';
+  const sem6TotalCredits = sem6Courses.reduce((acc, c) => acc + (parseInt(c.credits) || 0), 0) || 14;
+  const sem6HasDeficit = sem6Courses.some(
+    (c) => (parseFloat(c.internal !== undefined ? c.internal : c.total) || 0) < 50
+  );
+  const sem6DistinctionStatus =
+    parseFloat(sem6TotalPercentage) >= 75
+      ? 'Distinction'
+      : parseFloat(sem6TotalPercentage) >= 60
+      ? 'First Class'
+      : parseFloat(sem6TotalPercentage) >= 50
+      ? 'Second Class'
+      : 'Academic Warning';
 
   return (
     <DashboardLayout>
@@ -809,6 +851,10 @@ export default function StudentDashboard() {
                     }`}
                   >
                     AI Status: {aiRiskData.status} ({aiRiskData.score})
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5 shadow-xs">
+                    <Sparkles className="w-3 h-3 text-indigo-600" />
+                    <span>Sem 6 Marks: <strong className="font-extrabold">{sem6TotalScored}/{sem6MaxMarks}</strong> ({sem6TotalPercentage}%)</span>
                   </span>
                 </div>
 
@@ -938,8 +984,8 @@ export default function StudentDashboard() {
         {/* TAB 1: ACADEMIC OVERVIEW & CGPA */}
         {activeTab === 'overview' && (
           <div className="space-y-8 animate-fade-in">
-            {/* Quick Stats Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Quick Stats Row: 4 Essential Academic & Financial KPIs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Overall CGPA */}
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
@@ -961,6 +1007,48 @@ export default function StudentDashboard() {
                     First Class with Distinction
                   </span>
                   <span className="text-xs text-slate-500">Live Recalculated</span>
+                </div>
+              </div>
+
+              {/* Semester 6 Total Marks & Percentage KPI Card */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
+                      Sem 6 Total Marks & %
+                    </p>
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <h3 className="text-3xl font-black text-indigo-900">{sem6TotalPercentage}%</h3>
+                      <span className="text-xs font-bold text-slate-500 font-mono">
+                        ({sem6TotalScored}/{sem6MaxMarks})
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        parseFloat(sem6TotalPercentage) >= 75
+                          ? 'bg-emerald-500'
+                          : parseFloat(sem6TotalPercentage) >= 60
+                          ? 'bg-indigo-600'
+                          : parseFloat(sem6TotalPercentage) >= 50
+                          ? 'bg-amber-500'
+                          : 'bg-rose-500'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, parseFloat(sem6TotalPercentage)))}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-2 flex items-center justify-between font-medium">
+                    <span>4 Core Subjects</span>
+                    <span className={`font-bold ${sem6HasDeficit ? 'text-rose-600' : 'text-emerald-700'}`}>
+                      {sem6HasDeficit ? 'Deficit Subject' : sem6DistinctionStatus}
+                    </span>
+                  </p>
                 </div>
               </div>
 
@@ -1025,6 +1113,159 @@ export default function StudentDashboard() {
                     View Invoices & Pay →
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Semester 6 Detailed Marks Breakdown & Continuous Assessment Table */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Award className="w-5 h-5 text-indigo-600" />
+                      Semester 6 Continuous Assessment Marks & Total Percentage
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Subject-wise internal assessment marks recorded by faculty members with real-time aggregate percentage calculation.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Percentage</span>
+                    <span className="text-lg font-black text-indigo-700 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-200 inline-block font-mono">
+                      {sem6TotalPercentage}%
+                    </span>
+                  </div>
+                  <div className="text-right pl-3 border-l border-slate-200">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Scored</span>
+                    <span className="text-lg font-extrabold text-slate-900 inline-block font-mono">
+                      {sem6TotalScored} <span className="text-xs font-normal text-slate-400">/ {sem6MaxMarks}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50 uppercase text-[10px] text-slate-500 font-bold border-b border-slate-200">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">Course Code</th>
+                      <th scope="col" className="px-4 py-3">Course Title</th>
+                      <th scope="col" className="px-4 py-3 text-center">Credits</th>
+                      <th scope="col" className="px-4 py-3 text-center">Internal Score (/100)</th>
+                      <th scope="col" className="px-4 py-3">Score Progress</th>
+                      <th scope="col" className="px-4 py-3 text-center">Grade</th>
+                      <th scope="col" className="px-4 py-3 text-right">Academic Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {sem6Courses.map((course, idx) => {
+                      const score = parseFloat(course.internal !== undefined ? course.internal : course.total) || 0;
+                      const isAtRisk = score < 50;
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="px-4 py-3.5 font-mono font-bold text-slate-900">{course.code}</td>
+                          <td className="px-4 py-3.5 font-medium text-slate-900">{course.title}</td>
+                          <td className="px-4 py-3.5 text-center font-mono">{course.credits}</td>
+                          <td className="px-4 py-3.5 text-center">
+                            <span
+                              className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-sm ${
+                                isAtRisk
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : score >= 80
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                              }`}
+                            >
+                              {score} / 100
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 w-44">
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  isAtRisk
+                                    ? 'bg-rose-500'
+                                    : score >= 80
+                                    ? 'bg-emerald-500'
+                                    : 'bg-indigo-600'
+                                }`}
+                                style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">{score}% Scored</span>
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
+                                score >= 90
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : score >= 70
+                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                  : score >= 50
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}
+                            >
+                              {course.grade}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1 ${
+                                isAtRisk
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              }`}
+                            >
+                              {isAtRisk ? (
+                                <>
+                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                  At Risk (&lt;50)
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  Passed
+                                </>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-indigo-50/60 border-t-2 border-indigo-200 font-bold">
+                    <tr>
+                      <td colSpan={2} className="px-4 py-3 text-indigo-900 uppercase font-black tracking-wider text-[11px] flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-indigo-600" />
+                        Aggregate Continuous Assessment Total
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono text-indigo-900">{sem6TotalCredits}</td>
+                      <td className="px-4 py-3 text-center font-mono font-black text-indigo-900 text-sm">
+                        {sem6TotalScored} / {sem6MaxMarks}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${Math.min(100, Math.max(0, parseFloat(sem6TotalPercentage)))}%` }}
+                          ></div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono font-black text-indigo-900 text-sm">
+                        {sem6TotalPercentage}%
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="px-2.5 py-1 rounded bg-indigo-600 text-white text-[11px] font-black shadow-xs">
+                          {sem6DistinctionStatus}
+                        </span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
 
@@ -1240,6 +1481,15 @@ export default function StudentDashboard() {
                         </div>
 
                         <div className="flex items-center gap-6">
+                          {sem.semNumber === 6 && (
+                            <div className="text-right hidden sm:block">
+                              <span className="text-[10px] uppercase font-bold text-indigo-600 block">Total Percentage</span>
+                              <span className="text-sm font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-200">
+                                {sem6TotalPercentage}% ({sem6TotalScored}/{sem6MaxMarks})
+                              </span>
+                            </div>
+                          )}
+
                           <div className="text-right hidden sm:block">
                             <span className="text-[10px] uppercase font-bold text-slate-400 block">SGPA</span>
                             <span className="text-sm font-extrabold text-slate-900">
@@ -1270,8 +1520,12 @@ export default function StudentDashboard() {
                                   <th scope="col" className="px-4 py-3">Course Code</th>
                                   <th scope="col" className="px-4 py-3">Course Title</th>
                                   <th scope="col" className="px-4 py-3 text-center">Credits</th>
-                                  <th scope="col" className="px-4 py-3 text-center">Internal (40)</th>
-                                  <th scope="col" className="px-4 py-3 text-center">External (60)</th>
+                                  <th scope="col" className="px-4 py-3 text-center">
+                                    {sem.semNumber === 6 ? 'Continuous Internal (100)' : 'Internal (40)'}
+                                  </th>
+                                  <th scope="col" className="px-4 py-3 text-center">
+                                    {sem.semNumber === 6 ? 'External End-Sem' : 'External (60)'}
+                                  </th>
                                   <th scope="col" className="px-4 py-3 text-center">Total Score</th>
                                   <th scope="col" className="px-4 py-3 text-right">Grade</th>
                                 </tr>
@@ -1282,9 +1536,15 @@ export default function StudentDashboard() {
                                     <td className="px-4 py-3 font-mono font-bold text-slate-900">{course.code}</td>
                                     <td className="px-4 py-3 text-slate-800">{course.title}</td>
                                     <td className="px-4 py-3 text-center font-mono">{course.credits}</td>
-                                    <td className="px-4 py-3 text-center font-mono">{course.internal}</td>
-                                    <td className="px-4 py-3 text-center font-mono">{course.external}</td>
-                                    <td className="px-4 py-3 text-center font-mono font-bold text-indigo-700">{course.total}</td>
+                                    <td className="px-4 py-3 text-center font-mono font-bold text-slate-800">
+                                      {sem.semNumber === 6 ? `${course.internal} / 100` : course.internal}
+                                    </td>
+                                    <td className="px-4 py-3 text-center font-mono text-slate-400">
+                                      {sem.semNumber === 6 ? '-' : course.external}
+                                    </td>
+                                    <td className="px-4 py-3 text-center font-mono font-bold text-indigo-700">
+                                      {sem.semNumber === 6 ? `${course.total} / 100` : course.total}
+                                    </td>
                                     <td className="px-4 py-3 text-right">
                                       <span
                                         className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
@@ -1292,6 +1552,8 @@ export default function StudentDashboard() {
                                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                             : course.grade.startsWith('A') || course.grade.includes('Grade A')
                                             ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                            : course.grade.includes('F')
+                                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
                                             : 'bg-amber-50 text-amber-700 border border-amber-200'
                                         }`}
                                       >
@@ -1301,6 +1563,43 @@ export default function StudentDashboard() {
                                   </tr>
                                 ))}
                               </tbody>
+                              {sem.semNumber === 6 && (
+                                <tfoot className="bg-indigo-50/80 border-t-2 border-indigo-200 text-xs font-semibold text-slate-900">
+                                  <tr>
+                                    <td colSpan={2} className="px-4 py-3">
+                                      <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-indigo-600" />
+                                        <span className="font-extrabold text-indigo-900 uppercase tracking-wider text-[11px]">
+                                          Semester 6 Cumulative Total & Percentage
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center font-mono font-bold text-slate-800">
+                                      {sem6TotalCredits} Credits
+                                    </td>
+                                    <td className="px-4 py-3 text-center font-mono font-black text-indigo-900">
+                                      {sem6TotalScored} / {sem6MaxMarks}
+                                    </td>
+                                    <td className="px-4 py-3 text-center text-slate-400 font-medium">In Progress</td>
+                                    <td className="px-4 py-3 text-center font-mono font-black text-indigo-900 text-sm">
+                                      <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                        {sem6TotalPercentage}%
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                      <span
+                                        className={`px-2.5 py-1 rounded text-[11px] font-extrabold ${
+                                          sem6HasDeficit
+                                            ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                            : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                        }`}
+                                      >
+                                        {sem6HasDeficit ? 'Needs Remedial' : sem6DistinctionStatus}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                </tfoot>
+                              )}
                             </table>
                           </div>
                         </div>

@@ -251,7 +251,9 @@ ON CONFLICT (enrollment_number) DO NOTHING;
 INSERT INTO courses (id, name, department_id, credits)
 VALUES 
     ('27d6a359-8570-4e13-b2a8-73e03546e31e', 'Data Structures & Algorithms', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 4),
-    ('5bb138c2-848b-4ca3-9719-d8b8b07a719c', 'Introduction to Databases', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 3)
+    ('5bb138c2-848b-4ca3-9719-d8b8b07a719c', 'Introduction to Databases', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 3),
+    ('3a7e4b11-91f2-4c6e-8211-1a2b3c4d5e6f', 'Operating Systems', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 4),
+    ('4b8f5c22-a2e3-4d7f-9322-2b3c4d5e6f7a', 'Computer Networks', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 3)
 ON CONFLICT (id) DO NOTHING;
 
 -- 5. Insert Sample Marks & Risk Status for Alex Turner
