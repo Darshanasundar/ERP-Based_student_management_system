@@ -30,6 +30,7 @@ export function SocketProvider({ children }) {
       return;
     }
 
+    const backendEnvUrl = import.meta.env.VITE_BACKEND_URL;
     const targetUrl =
       wsUrl ||
       backendEnvUrl ||
