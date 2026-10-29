@@ -1,60 +1,121 @@
-version: '3.8'
-
 services:
-  mysql-db:
-    image: mysql:8.0
-    container_name: erp-mysql
+  db:
+    image: postgres:15-alpine
+    container_name: db
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: erp_db
-      MYSQL_USER: erp_user
-      MYSQL_PASSWORD: erp_password
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-erp_db}
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql-data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - erp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-erp_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  python-ml-service:
-    build: 
-      context: ./python-ml-microservice
-    container_name: erp-ml-predictor
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "6379:6379"
     networks:
       - erp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  spring-backend:
-    build: 
-      context: ./spring-backend-reference
-    container_name: erp-spring-backend
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - erp-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: unless-stopped
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/erp_db?useSSL=false&serverTimezone=UTC
-      - SPRING_DATASOURCE_USERNAME=erp_user
-      - SPRING_DATASOURCE_PASSWORD=erp_password
-      - PYTHON_SERVICE_URL=http://python-ml-service:8000/predict-risk
+      PORT: 3000
+      NODE_ENV: development
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-erp_db}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_erp_jwt_encryption_key_2026}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/src:/app/src
     depends_on:
-      - mysql-db
-      - python-ml-service
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - erp-network
 
-  react-frontend:
-    build: 
-      context: .
-    container_name: erp-react-frontend
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: ml-service
+    restart: unless-stopped
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      BACKEND_WEBHOOK_URL: http://backend:3000/api/internal/emit-risk-update
+    volumes:
+      - ./ml-service:/app
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - erp-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: unless-stopped
     ports:
       - "80:80"
+      - "8080:80"
     depends_on:
-      - spring-backend
+      - backend
     networks:
       - erp-network
 
 volumes:
-  mysql-data:
+  postgres_data:
+    driver: local
 
 networks:
   erp-network:

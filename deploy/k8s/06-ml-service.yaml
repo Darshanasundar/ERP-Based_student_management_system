@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-service
+  namespace: erp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-service
+  template:
+    metadata:
+      labels:
+        app: ml-service
+    spec:
+      containers:
+        - name: ml-service
+          image: erp-ml-service:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: RABBITMQ_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: erp-config
+                  key: RABBITMQ_URL
+            - name: BACKEND_WEBHOOK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: erp-config
+                  key: BACKEND_WEBHOOK_URL
