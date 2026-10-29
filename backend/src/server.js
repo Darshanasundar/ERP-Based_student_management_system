@@ -18,6 +18,7 @@ const paymentRoutes = require('./routes/payment.routes');
 const marksRoutes = require('./routes/marks.routes');
 const internalRoutes = require('./routes/internal.routes');
 const messageRoutes = require('./routes/message.routes');
+const leaveRoutes = require('./routes/leave.routes');
 const apiRoutes = require('./routes/index');
 
 const PORT = process.env.PORT || 3000;
@@ -34,6 +35,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/marks', marksRoutes);
 app.use('/api/internal', internalRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/leaves', leaveRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', apiRoutes);
 

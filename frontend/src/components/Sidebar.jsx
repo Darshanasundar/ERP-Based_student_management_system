@@ -113,7 +113,7 @@ export default function Sidebar() {
                     <span>{link.label}</span>
                   </div>
                   {link.badge && (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
                       Alert
                     </span>
                   )}
