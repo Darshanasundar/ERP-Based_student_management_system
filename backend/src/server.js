@@ -71,4 +71,6 @@ async function startServer() {
 
 startServer();
 
-module.exports = { server, app };
+module.exports = app;
+module.exports.server = server;
+module.exports.app = app;

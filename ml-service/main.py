@@ -14,7 +14,11 @@ logger = logging.getLogger("ml_service")
 app = FastAPI(title="ERP ML Academic Risk Assessment Microservice", version="2.0.0")
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-BACKEND_WEBHOOK_URL = os.getenv("BACKEND_WEBHOOK_URL", "http://backend:3000/api/internal/emit-risk-update")
+backend_base = os.getenv("BACKEND_URL")
+if backend_base:
+    BACKEND_WEBHOOK_URL = os.getenv("BACKEND_WEBHOOK_URL", f"{backend_base.rstrip('/')}/api/internal/emit-risk-update")
+else:
+    BACKEND_WEBHOOK_URL = os.getenv("BACKEND_WEBHOOK_URL", "http://backend:3000/api/internal/emit-risk-update")
 QUEUE_NAME = "risk_assessment_queue"
 
 
