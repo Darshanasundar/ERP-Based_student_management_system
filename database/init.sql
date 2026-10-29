@@ -69,7 +69,6 @@ CREATE TRIGGER trigger_students_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Indexes for performance & foreign key lookups
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
@@ -113,7 +112,6 @@ CREATE TRIGGER trigger_attendance_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_courses_department_id ON courses(department_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON attendance(student_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_course_id ON attendance(course_id);
@@ -154,11 +152,11 @@ CREATE TRIGGER trigger_payments_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_invoices_student_id ON invoices(student_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
 CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON payments(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date);
+
 -- 8. Marks & Grades Table
 CREATE TABLE IF NOT EXISTS marks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -222,9 +220,9 @@ CREATE TABLE IF NOT EXISTS leaves (
 CREATE INDEX IF NOT EXISTS idx_leaves_faculty_email ON leaves(faculty_email);
 CREATE INDEX IF NOT EXISTS idx_leaves_status ON leaves(status);
 
--- ==========================================
--- SEED DATA: Departments, Users, and Students
--- ==========================================
+-- =========================================================
+-- SEED DATA: Departments, Users, Students, Courses & Marks
+-- =========================================================
 
 -- 1. Insert Department
 INSERT INTO departments (id, name, description)
@@ -243,9 +241,21 @@ VALUES
     ('e0e6db2d-6906-421c-a710-499bf39e75ef', 'alex.turner@erp.com', '$2b$10$CeR31C7iNNcIJWTJm3pnlu2jVRSda.pblRIuGP9bJhhswWHeQj5ka', 'STUDENT', true)
 ON CONFLICT (email) DO NOTHING;
 
--- 3. Insert Student Record
+-- 3. Insert Student Record (Alex Turner)
 INSERT INTO students (id, user_id, department_id, enrollment_number, date_of_birth)
 VALUES 
     ('0937df8b-2b8f-49a7-bfee-84eace226eec', 'e0e6db2d-6906-421c-a710-499bf39e75ef', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 'STU-2026-CCF9BC', '2004-05-15')
 ON CONFLICT (enrollment_number) DO NOTHING;
 
+-- 4. Insert Sample Courses
+INSERT INTO courses (id, name, department_id, credits)
+VALUES 
+    ('27d6a359-8570-4e13-b2a8-73e03546e31e', 'Data Structures & Algorithms', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 4),
+    ('5bb138c2-848b-4ca3-9719-d8b8b07a719c', 'Introduction to Databases', 'bfbd9a42-0e41-4629-8473-36c0b7fb7069', 3)
+ON CONFLICT (id) DO NOTHING;
+
+-- 5. Insert Sample Marks & Risk Status for Alex Turner
+INSERT INTO marks (id, student_id, course_id, internal_score, external_score, total_score, grade, risk_score, risk_status)
+VALUES 
+    ('84d73d55-e3ab-48f3-9577-a791c139fecc', '0937df8b-2b8f-49a7-bfee-84eace226eec', '27d6a359-8570-4e13-b2a8-73e03546e31e', 45.00, 50.00, 95.00, 'A', 0.72, 'High Risk')
+ON CONFLICT (student_id, course_id) DO NOTHING;
